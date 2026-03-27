@@ -253,7 +253,12 @@ export default function UsuariosPage() {
                   <Label>ORPA asignada</Label>
                   <Select
                     value={form.orpa_id}
-                    onValueChange={(v) => setForm({ ...form, orpa_id: v === "none" ? "" : v })}
+                    onValueChange={(v) =>
+                      setForm((current) => ({
+                        ...current,
+                        orpa_id: v && v !== "none" ? v : "",
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Sin asignar (Oficina Central)" />
