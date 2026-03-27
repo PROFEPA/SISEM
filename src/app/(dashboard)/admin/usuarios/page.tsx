@@ -111,6 +111,8 @@ export default function UsuariosPage() {
     setCreating(true);
     setCreateError(null);
     setCreateSuccess(null);
+    const normalizedOrpaId =
+      form.orpa_id && form.orpa_id !== "none" ? form.orpa_id : null;
 
     const res = await fetch("/api/admin/usuarios", {
       method: "POST",
@@ -120,7 +122,7 @@ export default function UsuariosPage() {
         password: form.password,
         nombre_completo: form.nombre_completo,
         role: form.role,
-        orpa_id: form.orpa_id || null,
+        orpa_id: normalizedOrpaId,
       }),
     });
 
@@ -132,7 +134,7 @@ export default function UsuariosPage() {
       return;
     }
 
-    setCreateSuccess(`Usuario ${form.email} creado exitosamente`);
+    setCreateSuccess(json.message ?? `Usuario ${form.email} creado exitosamente`);
     setForm({ email: "", password: "", nombre_completo: "", role: "capturador", orpa_id: "" });
     loadProfiles();
 
@@ -251,13 +253,13 @@ export default function UsuariosPage() {
                   <Label>ORPA asignada</Label>
                   <Select
                     value={form.orpa_id}
-                    onValueChange={(v) => v && setForm({ ...form, orpa_id: v })}
+                    onValueChange={(v) => setForm({ ...form, orpa_id: v === "none" ? "" : v })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Ninguna" />
+                      <SelectValue placeholder="Sin asignar (Oficina Central)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Sin asignar</SelectItem>
+                      <SelectItem value="none">Sin asignar (Oficina Central)</SelectItem>
                       {orpas.map((o) => (
                         <SelectItem key={o.id} value={o.id}>
                           {o.clave} - {o.nombre}
