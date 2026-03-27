@@ -16,6 +16,7 @@ import {
   Menu,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Home,
   PenLine,
 } from "lucide-react";
@@ -72,6 +73,7 @@ export default function DashboardLayout({
   const [profile, setProfile] = useState<IProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -124,29 +126,31 @@ export default function DashboardLayout({
 
   const userInitial = (profile?.nombre_completo || "U")[0].toUpperCase();
 
-  function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  function SidebarContent({ onNavigate, isCollapsed = false }: { onNavigate?: () => void; isCollapsed?: boolean }) {
     return (
       <div className="flex flex-col h-full">
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
+        <div className={`${isCollapsed ? 'px-2' : 'px-5'} py-5 border-b border-white/10`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
             <Image
               src="/logo.png"
               alt="SISEM"
               width={40}
               height={40}
-              className="rounded-lg"
+              className="rounded-lg shrink-0"
               priority
             />
-            <div>
-              <h1 className="font-bold text-lg leading-tight text-white">SISEM</h1>
-              <p className="text-[11px] text-white/50 tracking-wide">PROFEPA</p>
-            </div>
+            {!isCollapsed && (
+              <div>
+                <h1 className="font-bold text-lg leading-tight text-white">SISEM</h1>
+                <p className="text-[11px] text-white/50 tracking-wide">PROFEPA</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className={`flex-1 ${isCollapsed ? 'px-2' : 'px-3'} py-4 space-y-1 overflow-y-auto`}>
           {filteredNav.map((item) => {
             const isActive =
               item.href === "/dashboard"
@@ -156,7 +160,8 @@ export default function DashboardLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                title={isCollapsed ? item.label : undefined}
+                className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} ${isCollapsed ? 'px-2' : 'px-3'} py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                   isActive
                     ? "bg-[#1B8A5A] text-white shadow-sm shadow-[#1B8A5A]/30"
                     : "text-white/60 hover:bg-white/8 hover:text-white"
@@ -164,37 +169,57 @@ export default function DashboardLayout({
                 onClick={onNavigate}
               >
                 <item.icon className="w-[18px] h-[18px] shrink-0" />
-                {item.label}
+                {!isCollapsed && item.label}
               </Link>
             );
           })}
         </nav>
 
+        {/* Collapse toggle (desktop only) */}
+        {!onNavigate && (
+          <div className={`${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="w-full flex items-center justify-center py-2 rounded-lg text-white/40 hover:bg-white/8 hover:text-white transition-colors cursor-pointer"
+              title={isCollapsed ? "Expandir menú" : "Contraer menú"}
+            >
+              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {!isCollapsed && <span className="ml-2 text-xs">Contraer</span>}
+            </button>
+          </div>
+        )}
+
         {/* User section */}
-        <div className="px-3 py-3 border-t border-white/10">
+        <div className={`${isCollapsed ? 'px-2' : 'px-3'} py-3 border-t border-white/10`}>
           {loading ? (
-            <div className="flex items-center gap-3 px-3 py-2">
-              <Skeleton className="w-8 h-8 rounded-full bg-white/10" />
-              <div className="flex-1">
-                <Skeleton className="h-3 w-24 mb-1.5 bg-white/10" />
-                <Skeleton className="h-2.5 w-16 bg-white/10" />
-              </div>
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2`}>
+              <Skeleton className="w-8 h-8 rounded-full bg-white/10 shrink-0" />
+              {!isCollapsed && (
+                <div className="flex-1">
+                  <Skeleton className="h-3 w-24 mb-1.5 bg-white/10" />
+                  <Skeleton className="h-2.5 w-16 bg-white/10" />
+                </div>
+              )}
             </div>
           ) : profile ? (
             <DropdownMenu>
-              <DropdownMenuTrigger className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/8 transition-colors text-left cursor-pointer outline-none">
-                  <div className="w-8 h-8 rounded-full bg-[#1B8A5A] flex items-center justify-center text-xs font-bold text-white">
+              <DropdownMenuTrigger className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} ${isCollapsed ? 'px-1' : 'px-3'} py-2 rounded-lg hover:bg-white/8 transition-colors text-left cursor-pointer outline-none`}>
+                  <div className="w-8 h-8 rounded-full bg-[#1B8A5A] flex items-center justify-center text-xs font-bold text-white shrink-0">
                     {userInitial}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">
-                      {profile.nombre_completo || "Usuario"}
-                    </p>
-                    <p className="text-[11px] text-white/50">
-                      {ROLE_LABELS[profile.role] || profile.role}
-                    </p>
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-white/40" />
+                  {!isCollapsed && (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">
+                          {profile.nombre_completo || "Usuario"}
+                        </p>
+                        <p className="text-[11px] text-white/50">
+                          {ROLE_LABELS[profile.role] || profile.role}
+                        </p>
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-white/40" />
+                    </>
+                  )}
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start" className="w-56">
                 <div className="px-2 py-1.5">
@@ -217,12 +242,13 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex bg-[#F8F9FB]">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col fixed top-0 left-0 h-screen bg-[#0F1923] z-40">
-        <SidebarContent />
+      {/* Desktop sidebar */}
+      <aside className={`hidden lg:flex ${collapsed ? 'w-16' : 'w-64'} flex-col fixed top-0 left-0 h-screen bg-[#0F1923] z-40 transition-all duration-300`}>
+        <SidebarContent isCollapsed={collapsed} />
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
+      <div className={`flex-1 flex flex-col min-h-screen ${collapsed ? 'lg:ml-16' : 'lg:ml-64'} transition-all duration-300`}>
         {/* Header */}
         <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -49,6 +49,8 @@ interface DashboardData {
     monto: number;
     pagados: number;
     impugnados: number;
+    enviadosCobro: number;
+    pendientes: number;
   }>;
   porMateria: Array<{ materia: string; count: number }>;
 }
@@ -716,6 +718,12 @@ export default function DashboardPage() {
                     <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
                       Impugnados
                     </th>
+                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
+                      Enviados a cobro
+                    </th>
+                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
+                      Pendientes
+                    </th>
                     <th className="py-3 px-6 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
                       % Cobrado
                     </th>
@@ -765,6 +773,28 @@ export default function DashboardPage() {
                             {orpa.impugnados}
                           </span>
                         </td>
+                        <td className="py-3 px-4 text-right">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                              orpa.enviadosCobro > 0
+                                ? "bg-amber-50 text-amber-600"
+                                : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {orpa.enviadosCobro}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                              orpa.pendientes > 0
+                                ? "bg-indigo-50 text-indigo-600"
+                                : "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {orpa.pendientes}
+                          </span>
+                        </td>
                         <td className="py-3 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -802,6 +832,12 @@ export default function DashboardPage() {
                       </td>
                       <td className="py-3 px-4 text-right font-bold text-rose-600 tabular-nums">
                         {data.statusDist.impugnados.toLocaleString("es-MX")}
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-amber-600 tabular-nums">
+                        {data.statusDist.enviadosCobro.toLocaleString("es-MX")}
+                      </td>
+                      <td className="py-3 px-4 text-right font-bold text-indigo-600 tabular-nums">
+                        {data.statusDist.pendientes.toLocaleString("es-MX")}
                       </td>
                       <td className="py-3 px-6 text-right font-bold text-gray-900 tabular-nums">
                         {data.porcentajeCobrado.toFixed(1)}%
