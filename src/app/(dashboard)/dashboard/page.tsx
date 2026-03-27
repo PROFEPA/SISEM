@@ -1012,11 +1012,11 @@ export default function DashboardPage() {
                     <p className="font-semibold text-gray-900">{item?.nombreFull || label}</p>
                     <p className="text-xs text-gray-400 mb-2">{label} — {item?.total} expedientes</p>
                     <div className="space-y-1">
-                      {payload.map((entry: { name?: string; value?: number; color?: string }) => (
+                      {payload.map((entry) => (
                         <div key={String(entry.name)} className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                            <span className="text-gray-600">{entry.name}</span>
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: String(entry.color) }} />
+                            <span className="text-gray-600">{String(entry.name)}</span>
                           </div>
                           <span className="font-semibold tabular-nums">{Number(entry.value).toLocaleString("es-MX")}</span>
                         </div>
