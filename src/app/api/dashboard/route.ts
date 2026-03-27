@@ -73,7 +73,7 @@ export async function GET() {
     const totalExpedientes = allExpedientes?.length || 0;
 
     // Aggregation maps
-    const orpaStats = new Map<string, { nombre: string; clave: string; total: number; monto: number; pagados: number; impugnados: number; enviadosCobro: number; pendientes: number }>();
+    const orpaStats = new Map<string, { nombre: string; clave: string; total: number; monto: number; pagados: number; montoPagados: number; impugnados: number; montoImpugnados: number; enviadosCobro: number; montoEnviadosCobro: number; pendientes: number; montoPendientes: number }>();
     const materiaDist = new Map<string, number>();
     const monthlyMap = new Map<string, { count: number; monto: number }>();
 
@@ -94,18 +94,18 @@ export async function GET() {
           orpaStats.set(key, {
             nombre: orpa?.nombre || "Desconocida",
             clave: orpa?.clave || "?",
-            total: 0, monto: 0, pagados: 0, impugnados: 0, enviadosCobro: 0, pendientes: 0,
+            total: 0, monto: 0, pagados: 0, montoPagados: 0, impugnados: 0, montoImpugnados: 0, enviadosCobro: 0, montoEnviadosCobro: 0, pendientes: 0, montoPendientes: 0,
           });
         }
         const stats = orpaStats.get(key)!;
         stats.total += 1;
         stats.monto += monto;
-        if (exp.pagado) stats.pagados += 1;
-        if (exp.impugnado) stats.impugnados += 1;
-        if (exp.pagado) { /* already counted */ }
-        else if (exp.impugnado) { /* already counted */ }
-        else if (exp.enviada_a_cobro) stats.enviadosCobro += 1;
-        else stats.pendientes += 1;
+        if (exp.pagado) { stats.pagados += 1; stats.montoPagados += monto; }
+        if (exp.impugnado) { stats.impugnados += 1; stats.montoImpugnados += monto; }
+        if (exp.pagado) { /* status already classified */ }
+        else if (exp.impugnado) { /* status already classified */ }
+        else if (exp.enviada_a_cobro) { stats.enviadosCobro += 1; stats.montoEnviadosCobro += monto; }
+        else { stats.pendientes += 1; stats.montoPendientes += monto; }
 
         // Totals
         montoTotal += monto;

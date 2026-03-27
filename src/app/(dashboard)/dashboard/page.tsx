@@ -51,14 +51,18 @@ interface DashboardData {
     total: number;
     monto: number;
     pagados: number;
+    montoPagados: number;
     impugnados: number;
+    montoImpugnados: number;
     enviadosCobro: number;
+    montoEnviadosCobro: number;
     pendientes: number;
+    montoPendientes: number;
   }>;
   porMateria: Array<{ materia: string; count: number }>;
 }
 
-type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "pendientes" | "cobPct";
+type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "pendientes" | "cobPct" | "pendPct";
 type SortDir = "asc" | "desc";
 
 // ============================================================
@@ -323,6 +327,9 @@ export default function DashboardPage() {
     if (sortKey === "cobPct") {
       va = a.total > 0 ? a.pagados / a.total : 0;
       vb = b.total > 0 ? b.pagados / b.total : 0;
+    } else if (sortKey === "pendPct") {
+      va = a.total > 0 ? a.pendientes / a.total : 0;
+      vb = b.total > 0 ? b.pendientes / b.total : 0;
     } else if (sortKey === "nombre") {
       va = a.nombre;
       vb = b.nombre;
@@ -793,12 +800,20 @@ export default function DashboardPage() {
                     >
                       <span className="inline-flex items-center justify-end gap-1">% Cobrado <SortIcon column="cobPct" /></span>
                     </th>
+                    <th
+                      className="py-3 px-6 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("pendPct")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">% Pendientes <SortIcon column="pendPct" /></span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sortedOrpas.map((orpa, idx) => {
                     const cobPct =
                       orpa.total > 0 ? (orpa.pagados / orpa.total) * 100 : 0;
+                    const pendPct =
+                      orpa.total > 0 ? (orpa.pendientes / orpa.total) * 100 : 0;
                     return (
                       <tr
                         key={orpa.clave}
@@ -824,42 +839,54 @@ export default function DashboardPage() {
                           {formatMoney(orpa.monto)}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 tabular-nums">
-                            {orpa.pagados}
-                          </span>
+                          <div>
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 tabular-nums">
+                              {orpa.pagados}
+                            </span>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoPagados)}</p>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
-                              orpa.impugnados > 0
-                                ? "bg-rose-50 text-rose-600"
-                                : "bg-gray-100 text-gray-500"
-                            }`}
-                          >
-                            {orpa.impugnados}
-                          </span>
+                          <div>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                                orpa.impugnados > 0
+                                  ? "bg-rose-50 text-rose-600"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {orpa.impugnados}
+                            </span>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoImpugnados)}</p>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
-                              orpa.enviadosCobro > 0
-                                ? "bg-amber-50 text-amber-600"
-                                : "bg-gray-100 text-gray-500"
-                            }`}
-                          >
-                            {orpa.enviadosCobro}
-                          </span>
+                          <div>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                                orpa.enviadosCobro > 0
+                                  ? "bg-amber-50 text-amber-600"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {orpa.enviadosCobro}
+                            </span>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoEnviadosCobro)}</p>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
-                              orpa.pendientes > 0
-                                ? "bg-indigo-50 text-indigo-600"
-                                : "bg-gray-100 text-gray-500"
-                            }`}
-                          >
-                            {orpa.pendientes}
-                          </span>
+                          <div>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                                orpa.pendientes > 0
+                                  ? "bg-indigo-50 text-indigo-600"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {orpa.pendientes}
+                            </span>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoPendientes)}</p>
+                          </div>
                         </td>
                         <td className="py-3 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -873,6 +900,21 @@ export default function DashboardPage() {
                             </div>
                             <span className="text-xs font-medium text-gray-500 tabular-nums w-10 text-right">
                               {cobPct.toFixed(0)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-indigo-500 rounded-full"
+                                style={{
+                                  width: `${Math.min(pendPct, 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 tabular-nums w-10 text-right">
+                              {pendPct.toFixed(0)}%
                             </span>
                           </div>
                         </td>
@@ -893,20 +935,29 @@ export default function DashboardPage() {
                       <td className="py-3 px-4 text-right font-bold text-gray-900 tabular-nums">
                         {formatMoney(data.montoTotal)}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-emerald-700 tabular-nums">
-                        {data.statusDist.pagados.toLocaleString("es-MX")}
+                      <td className="py-3 px-4 text-right">
+                        <span className="font-bold text-emerald-700 tabular-nums">{data.statusDist.pagados.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(data.montoPagado)}</p>
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-rose-600 tabular-nums">
-                        {data.statusDist.impugnados.toLocaleString("es-MX")}
+                      <td className="py-3 px-4 text-right">
+                        <span className="font-bold text-rose-600 tabular-nums">{data.statusDist.impugnados.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoImpugnados, 0))}</p>
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-amber-600 tabular-nums">
-                        {data.statusDist.enviadosCobro.toLocaleString("es-MX")}
+                      <td className="py-3 px-4 text-right">
+                        <span className="font-bold text-amber-600 tabular-nums">{data.statusDist.enviadosCobro.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoEnviadosCobro, 0))}</p>
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-indigo-600 tabular-nums">
-                        {data.statusDist.pendientes.toLocaleString("es-MX")}
+                      <td className="py-3 px-4 text-right">
+                        <span className="font-bold text-indigo-600 tabular-nums">{data.statusDist.pendientes.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoPendientes, 0))}</p>
                       </td>
                       <td className="py-3 px-6 text-right font-bold text-gray-900 tabular-nums">
                         {data.porcentajeCobrado.toFixed(1)}%
+                      </td>
+                      <td className="py-3 px-6 text-right font-bold text-gray-900 tabular-nums">
+                        {data.totalExpedientes > 0
+                          ? ((data.statusDist.pendientes / data.totalExpedientes) * 100).toFixed(1)
+                          : "0.0"}%
                       </td>
                     </tr>
                   </tfoot>
