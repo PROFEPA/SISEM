@@ -10,6 +10,9 @@ import {
   AlertTriangle,
   Scale,
   RefreshCw,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   BarChart,
@@ -54,6 +57,9 @@ interface DashboardData {
   }>;
   porMateria: Array<{ materia: string; count: number }>;
 }
+
+type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "pendientes" | "cobPct";
+type SortDir = "asc" | "desc";
 
 // ============================================================
 // Constants
@@ -263,6 +269,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [sortKey, setSortKey] = useState<OrpaSortKey>("monto");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   async function fetchData() {
     try {
@@ -299,6 +307,40 @@ export default function DashboardPage() {
     : [];
 
   const totalStatus = pieData.reduce((acc, d) => acc + d.value, 0);
+
+  function toggleSort(key: OrpaSortKey) {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  const sortedOrpas = data?.porOrpa ? [...data.porOrpa].sort((a, b) => {
+    let va: number | string;
+    let vb: number | string;
+    if (sortKey === "cobPct") {
+      va = a.total > 0 ? a.pagados / a.total : 0;
+      vb = b.total > 0 ? b.pagados / b.total : 0;
+    } else if (sortKey === "nombre") {
+      va = a.nombre;
+      vb = b.nombre;
+    } else {
+      va = a[sortKey];
+      vb = b[sortKey];
+    }
+    if (va < vb) return sortDir === "asc" ? -1 : 1;
+    if (va > vb) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  }) : [];
+
+  function SortIcon({ column }: { column: OrpaSortKey }) {
+    if (sortKey !== column) return <ArrowUpDown className="w-3 h-3 text-gray-300" />;
+    return sortDir === "asc"
+      ? <ChevronUp className="w-3 h-3 text-emerald-600" />
+      : <ChevronDown className="w-3 h-3 text-emerald-600" />;
+  }
 
   return (
     <div className="space-y-6">
@@ -703,34 +745,58 @@ export default function DashboardPage() {
                     <th className="py-3 px-6 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
                       #
                     </th>
-                    <th className="py-3 px-4 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      ORPA
+                    <th
+                      className="py-3 px-4 text-left font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("nombre")}
+                    >
+                      <span className="inline-flex items-center gap-1">ORPA <SortIcon column="nombre" /></span>
                     </th>
-                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      Expedientes
+                    <th
+                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("total")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">Expedientes <SortIcon column="total" /></span>
                     </th>
-                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      Monto Total
+                    <th
+                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("monto")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">Monto Total <SortIcon column="monto" /></span>
                     </th>
-                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      Pagados
+                    <th
+                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("pagados")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">Pagados <SortIcon column="pagados" /></span>
                     </th>
-                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      Impugnados
+                    <th
+                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("impugnados")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">Impugnados <SortIcon column="impugnados" /></span>
                     </th>
-                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      Enviados a cobro
+                    <th
+                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("enviadosCobro")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">Enviados a cobro <SortIcon column="enviadosCobro" /></span>
                     </th>
-                    <th className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      Pendientes
+                    <th
+                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("pendientes")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">Pendientes <SortIcon column="pendientes" /></span>
                     </th>
-                    <th className="py-3 px-6 text-right font-medium text-gray-500 text-xs uppercase tracking-wider">
-                      % Cobrado
+                    <th
+                      className="py-3 px-6 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      onClick={() => toggleSort("cobPct")}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1">% Cobrado <SortIcon column="cobPct" /></span>
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {data?.porOrpa.map((orpa, idx) => {
+                  {sortedOrpas.map((orpa, idx) => {
                     const cobPct =
                       orpa.total > 0 ? (orpa.pagados / orpa.total) * 100 : 0;
                     return (
