@@ -967,6 +967,87 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Stacked bar chart: status por ORPA */}
+      <ChartCard
+        title="Expedientes por estatus y ORPA"
+        subtitle="Pagados, impugnados, enviados a cobro y pendientes — barras apiladas"
+        loading={loading}
+      >
+        <ResponsiveContainer width="100%" height={Math.max(450, (data?.porOrpa.length || 0) * 36)}>
+          <BarChart
+            data={data?.porOrpa.map((o) => ({
+              nombre: o.clave,
+              nombreFull: o.nombre,
+              Pagados: o.pagados,
+              Impugnados: o.impugnados,
+              "Enviados a cobro": o.enviadosCobro,
+              Pendientes: o.pendientes,
+              total: o.total,
+            })) || []}
+            layout="vertical"
+            margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+            <XAxis
+              type="number"
+              tick={{ fontSize: 11, fill: "#9CA3AF" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="nombre"
+              tick={{ fontSize: 11, fill: "#6B7280" }}
+              width={55}
+              axisLine={false}
+              tickLine={false}
+            />
+            <RechartsTooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const item = payload[0]?.payload;
+                return (
+                  <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm min-w-[180px]">
+                    <p className="font-semibold text-gray-900">{item?.nombreFull || label}</p>
+                    <p className="text-xs text-gray-400 mb-2">{label} — {item?.total} expedientes</p>
+                    <div className="space-y-1">
+                      {payload.map((entry: { name?: string; value?: number; color?: string }) => (
+                        <div key={String(entry.name)} className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                            <span className="text-gray-600">{entry.name}</span>
+                          </div>
+                          <span className="font-semibold tabular-nums">{Number(entry.value).toLocaleString("es-MX")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="Pagados" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="Impugnados" stackId="a" fill="#EF4444" />
+            <Bar dataKey="Enviados a cobro" stackId="a" fill="#F59E0B" />
+            <Bar dataKey="Pendientes" stackId="a" fill="#6366F1" radius={[0, 4, 4, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-gray-100">
+          {[
+            { label: "Pagados", color: "#10B981" },
+            { label: "Impugnados", color: "#EF4444" },
+            { label: "Enviados a cobro", color: "#F59E0B" },
+            { label: "Pendientes", color: "#6366F1" },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
+              <span className="text-xs text-gray-600">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </ChartCard>
     </div>
   );
 }
