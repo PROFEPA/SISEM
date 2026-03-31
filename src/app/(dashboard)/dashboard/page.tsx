@@ -1,8 +1,19 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   FileText,
   DollarSign,
@@ -13,6 +24,9 @@ import {
   ArrowUpDown,
   ChevronUp,
   ChevronDown,
+  Bell,
+  Eye,
+  Clock,
 } from "lucide-react";
 import {
   BarChart,
@@ -60,6 +74,38 @@ interface DashboardData {
     montoPendientes: number;
   }>;
   porMateria: Array<{ materia: string; count: number }>;
+  pendientes?: {
+    notificacion: {
+      items: PendienteRow[];
+      total: number;
+      vencidos: number;
+      porVencerEstaSemana: number;
+    };
+    cobro: {
+      items: PendienteRow[];
+      total: number;
+      vencidos: number;
+      montoTotal: number;
+    };
+    pago: {
+      items: PendienteRow[];
+      total: number;
+      montoTotal: number;
+    };
+  };
+}
+
+interface PendienteRow {
+  expediente_id: string;
+  numero_expediente: string;
+  orpa_nombre: string;
+  orpa_id: string;
+  monto_multa: number;
+  fecha_referencia: string;
+  fecha_limite: string;
+  dias_restantes: number;
+  vencido: boolean;
+  semaforo: "verde" | "amarillo" | "rojo";
 }
 
 type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "pendientes" | "cobPct" | "pendPct";
@@ -1048,6 +1094,230 @@ export default function DashboardPage() {
           ))}
         </div>
       </ChartCard>
+
+      {/* ── SEGUIMIENTO DE PENDIENTES ── */}
+      {!loading && data?.pendientes && (
+        <Card className="border border-gray-200/60 shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Bell className="w-5 h-5 text-amber-500" />
+              <CardTitle className="text-base font-semibold text-gray-900">
+                Seguimiento de Pendientes
+              </CardTitle>
+            </div>
+            <p className="text-xs text-gray-400">
+              Expedientes pendientes de notificación, cobro y pago
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="notificacion" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="notificacion" className="text-xs">
+                  Notificación
+                  {data.pendientes.notificacion.vencidos > 0 && (
+                    <Badge variant="destructive" className="ml-1 h-4 px-1 text-[10px]">
+                      {data.pendientes.notificacion.vencidos}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="cobro" className="text-xs">
+                  Cobro
+                  {data.pendientes.cobro.vencidos > 0 && (
+                    <Badge variant="destructive" className="ml-1 h-4 px-1 text-[10px]">
+                      {data.pendientes.cobro.vencidos}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="pago" className="text-xs">
+                  Pago
+                  <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                    {data.pendientes.pago.total}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Tab: Notificación Pendiente */}
+              <TabsContent value="notificacion" className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium">Pendientes</p>
+                    <p className="text-2xl font-bold text-blue-700">{data.pendientes.notificacion.total}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                    <p className="text-xs text-red-600 font-medium">Vencidos (&gt;15 días hábiles)</p>
+                    <p className="text-2xl font-bold text-red-700">{data.pendientes.notificacion.vencidos}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+                    <p className="text-xs text-amber-600 font-medium">Por vencer esta semana</p>
+                    <p className="text-2xl font-bold text-amber-700">{data.pendientes.notificacion.porVencerEstaSemana}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Expediente</TableHead>
+                        <TableHead>ORPA</TableHead>
+                        <TableHead>F. Resolución</TableHead>
+                        <TableHead>F. Límite</TableHead>
+                        <TableHead className="text-right">Días restantes</TableHead>
+                        <TableHead className="w-10">Estado</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.pendientes.notificacion.items.slice(0, 50).map((item) => (
+                        <TableRow key={item.expediente_id}>
+                          <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
+                          <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
+                          <TableCell className="text-xs">{item.fecha_referencia}</TableCell>
+                          <TableCell className="text-xs">{item.fecha_limite}</TableCell>
+                          <TableCell className="text-right text-xs font-medium">
+                            {item.dias_restantes}
+                          </TableCell>
+                          <TableCell>
+                            <div className={`w-3 h-3 rounded-full ${
+                              item.semaforo === "rojo" ? "bg-red-500" :
+                              item.semaforo === "amarillo" ? "bg-amber-400" : "bg-emerald-500"
+                            }`} />
+                          </TableCell>
+                          <TableCell>
+                            <Link href={`/expedientes/${item.expediente_id}`}>
+                              <Eye className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {data.pendientes.notificacion.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                            No hay expedientes pendientes de notificación
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              {/* Tab: Cobro Pendiente */}
+              <TabsContent value="cobro" className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium">Pendientes</p>
+                    <p className="text-2xl font-bold text-blue-700">{data.pendientes.cobro.total}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                    <p className="text-xs text-red-600 font-medium">Vencidos (&gt;2 meses)</p>
+                    <p className="text-2xl font-bold text-red-700">{data.pendientes.cobro.vencidos}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                    <p className="text-xs text-emerald-600 font-medium">Monto total pendiente</p>
+                    <p className="text-2xl font-bold text-emerald-700">{formatMoney(data.pendientes.cobro.montoTotal)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Expediente</TableHead>
+                        <TableHead>ORPA</TableHead>
+                        <TableHead>F. Notificación</TableHead>
+                        <TableHead>F. Límite</TableHead>
+                        <TableHead className="text-right">Monto</TableHead>
+                        <TableHead className="text-right">Días restantes</TableHead>
+                        <TableHead className="w-10">Estado</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.pendientes.cobro.items.slice(0, 50).map((item) => (
+                        <TableRow key={item.expediente_id}>
+                          <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
+                          <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
+                          <TableCell className="text-xs">{item.fecha_referencia}</TableCell>
+                          <TableCell className="text-xs">{item.fecha_limite}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
+                          <TableCell className="text-right text-xs font-medium">
+                            {item.dias_restantes}
+                          </TableCell>
+                          <TableCell>
+                            <div className={`w-3 h-3 rounded-full ${
+                              item.semaforo === "rojo" ? "bg-red-500" :
+                              item.semaforo === "amarillo" ? "bg-amber-400" : "bg-emerald-500"
+                            }`} />
+                          </TableCell>
+                          <TableCell>
+                            <Link href={`/expedientes/${item.expediente_id}`}>
+                              <Eye className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {data.pendientes.cobro.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
+                            No hay expedientes pendientes de cobro
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              {/* Tab: Pago Pendiente */}
+              <TabsContent value="pago" className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium">Sin pagar</p>
+                    <p className="text-2xl font-bold text-blue-700">{data.pendientes.pago.total}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                    <p className="text-xs text-emerald-600 font-medium">Monto total adeudado</p>
+                    <p className="text-2xl font-bold text-emerald-700">{formatMoney(data.pendientes.pago.montoTotal)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Expediente</TableHead>
+                        <TableHead>ORPA</TableHead>
+                        <TableHead>F. Resolución</TableHead>
+                        <TableHead className="text-right">Monto</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.pendientes.pago.items.slice(0, 50).map((item) => (
+                        <TableRow key={item.expediente_id}>
+                          <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
+                          <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
+                          <TableCell className="text-xs">{item.fecha_referencia || "—"}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
+                          <TableCell>
+                            <Link href={`/expedientes/${item.expediente_id}`}>
+                              <Eye className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {data.pendientes.pago.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                            No hay expedientes pendientes de pago
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

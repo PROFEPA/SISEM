@@ -1,5 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import {
+  fechaLimiteNotificacion,
+  fechaLimiteCobro,
+  diasHabilesRestantesNotificacion,
+  diasRestantesCobro,
+  formatDate,
+} from "@/lib/business-days";
 
 // Valid date range for PROFEPA multas (oct 2024 – present)
 const MIN_DATE = "2024-10-01";
@@ -30,12 +37,15 @@ export async function GET() {
     // Supabase defaults to 1000 rows — fetch all in batches
     const PAGE_SIZE = 1000;
     type ExpRow = {
+      id: string;
       orpa_id: string;
+      numero_expediente: string;
       monto_multa: unknown;
       pagado: boolean;
       impugnado: boolean;
       tipo_impugnacion: string | null;
       fecha_resolucion: string | null;
+      fecha_notificacion: string | null;
       materia: string | null;
       enviada_a_cobro: boolean;
       orpa: { nombre: string; clave: string } | null;
@@ -49,7 +59,7 @@ export async function GET() {
       const to = from + PAGE_SIZE - 1;
       const { data: batch, error: batchError } = await supabase
         .from("expedientes")
-        .select("orpa_id, monto_multa, pagado, impugnado, tipo_impugnacion, fecha_resolucion, materia, enviada_a_cobro, orpa:orpas(nombre, clave)")
+        .select("id, numero_expediente, orpa_id, monto_multa, pagado, impugnado, tipo_impugnacion, fecha_resolucion, fecha_notificacion, materia, enviada_a_cobro, orpa:orpas(nombre, clave)")
         .range(from, to);
 
       if (batchError) {
@@ -158,6 +168,95 @@ export async function GET() {
       .sort(([, a], [, b]) => b - a)
       .map(([materia, count]) => ({ materia, count }));
 
+    // ── Pendientes: notificación, cobro, pago ──
+    const hoy = formatDate(new Date());
+
+    type PendienteRow = {
+      expediente_id: string;
+      numero_expediente: string;
+      orpa_nombre: string;
+      orpa_id: string;
+      monto_multa: number;
+      fecha_referencia: string;
+      fecha_limite: string;
+      dias_restantes: number;
+      vencido: boolean;
+      semaforo: "verde" | "amarillo" | "rojo";
+    };
+
+    const pendientesNotificacion: PendienteRow[] = [];
+    const pendientesCobro: PendienteRow[] = [];
+    const pendientesPago: PendienteRow[] = [];
+
+    if (allExpedientes) {
+      for (const exp of allExpedientes) {
+        const orpa = exp.orpa as unknown as { nombre: string; clave: string } | null;
+        const monto = Number(exp.monto_multa) || 0;
+
+        // Notificación pendiente: tiene fecha_resolucion pero NO fecha_notificacion
+        if (exp.fecha_resolucion && !exp.fecha_notificacion) {
+          const dias = diasHabilesRestantesNotificacion(exp.fecha_resolucion, hoy);
+          const limite = fechaLimiteNotificacion(exp.fecha_resolucion);
+          let semaforo: "verde" | "amarillo" | "rojo" = "verde";
+          if (dias < 0) semaforo = "rojo";
+          else if (dias <= 5) semaforo = "amarillo";
+          pendientesNotificacion.push({
+            expediente_id: exp.id,
+            numero_expediente: exp.numero_expediente,
+            orpa_nombre: orpa?.nombre || "Sin ORPA",
+            orpa_id: exp.orpa_id,
+            monto_multa: monto,
+            fecha_referencia: exp.fecha_resolucion,
+            fecha_limite: limite,
+            dias_restantes: dias,
+            vencido: dias < 0,
+            semaforo,
+          });
+        }
+
+        // Cobro pendiente: tiene fecha_notificacion, NO enviada a cobro, NO pagado
+        if (exp.fecha_notificacion && !exp.enviada_a_cobro && !exp.pagado) {
+          const dias = diasRestantesCobro(exp.fecha_notificacion, hoy);
+          const limite = fechaLimiteCobro(exp.fecha_notificacion);
+          let semaforo: "verde" | "amarillo" | "rojo" = "verde";
+          if (dias < 0) semaforo = "rojo";
+          else if (dias <= 30) semaforo = "amarillo";
+          pendientesCobro.push({
+            expediente_id: exp.id,
+            numero_expediente: exp.numero_expediente,
+            orpa_nombre: orpa?.nombre || "Sin ORPA",
+            orpa_id: exp.orpa_id,
+            monto_multa: monto,
+            fecha_referencia: exp.fecha_notificacion,
+            fecha_limite: limite,
+            dias_restantes: dias,
+            vencido: dias < 0,
+            semaforo,
+          });
+        }
+
+        // Pago pendiente: no pagado
+        if (!exp.pagado) {
+          pendientesPago.push({
+            expediente_id: exp.id,
+            numero_expediente: exp.numero_expediente,
+            orpa_nombre: orpa?.nombre || "Sin ORPA",
+            orpa_id: exp.orpa_id,
+            monto_multa: monto,
+            fecha_referencia: exp.fecha_resolucion || "",
+            fecha_limite: "",
+            dias_restantes: 0,
+            vencido: false,
+            semaforo: "verde",
+          });
+        }
+      }
+    }
+
+    pendientesNotificacion.sort((a, b) => a.dias_restantes - b.dias_restantes);
+    pendientesCobro.sort((a, b) => a.dias_restantes - b.dias_restantes);
+    pendientesPago.sort((a, b) => b.monto_multa - a.monto_multa);
+
     return NextResponse.json({
       data: {
         totalExpedientes,
@@ -168,6 +267,25 @@ export async function GET() {
         monthlyTrend,
         porOrpa: orpaArray,
         porMateria: materiaArray,
+        pendientes: {
+          notificacion: {
+            items: pendientesNotificacion,
+            total: pendientesNotificacion.length,
+            vencidos: pendientesNotificacion.filter((p) => p.vencido).length,
+            porVencerEstaSemana: pendientesNotificacion.filter((p) => !p.vencido && p.dias_restantes <= 5).length,
+          },
+          cobro: {
+            items: pendientesCobro,
+            total: pendientesCobro.length,
+            vencidos: pendientesCobro.filter((p) => p.vencido).length,
+            montoTotal: pendientesCobro.reduce((s, p) => s + p.monto_multa, 0),
+          },
+          pago: {
+            items: pendientesPago,
+            total: pendientesPago.length,
+            montoTotal: pendientesPago.reduce((s, p) => s + p.monto_multa, 0),
+          },
+        },
       },
       error: null,
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,30 +33,34 @@ const TIPOS_PERSONA = [
   { value: "moral", label: "Persona Moral" },
 ];
 
-const TIPOS_IMPUGNACION = [
-  { value: "RECURSO_REVISION", label: "Recurso de Revisión" },
-  { value: "JUICIO_NULIDAD", label: "Juicio de Nulidad" },
-  { value: "AMPARO", label: "Amparo" },
-  { value: "CONMUTACION", label: "Conmutación" },
-];
-
-const RESULTADOS_IMPUGNACION = [
-  { value: "FAVORABLE_PROFEPA", label: "Favorable a PROFEPA" },
-  { value: "NO_FAVORABLE", label: "No Favorable a PROFEPA" },
-  { value: "PENDIENTE", label: "Pendiente de Resolución" },
-];
-
 const SI_NO = [
   { value: "true", label: "SI" },
   { value: "false", label: "NO" },
 ];
 
+interface TipoImpugnacion {
+  id: number;
+  clave: string;
+  nombre: string;
+  resultados: ResultadoImpugnacion[];
+}
+
+interface ResultadoImpugnacion {
+  id: number;
+  clave: string;
+  nombre: string;
+  favorable_profepa: boolean;
+}
+
 const INITIAL_FORM = {
   numero_expediente: "",
   materia: "",
-  nombre_infractor: "",
-  rfc_infractor: "",
   tipo_persona: "",
+  nombre_infractor: "",
+  apellido_paterno: "",
+  apellido_materno: "",
+  razon_social: "",
+  rfc_infractor: "",
   domicilio_infractor: "",
   giro_actividad: "",
   articulo_infringido: "",
@@ -90,6 +94,12 @@ export default function CapturaPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [tiposImpugnacion, setTiposImpugnacion] = useState<TipoImpugnacion[]>([]);
+  const [resultadosFavorable, setResultadosFavorable] = useState<boolean | null>(null);
+
+  // Resultados filtrados por el tipo de impugnación seleccionado
+  const resultadosDisponibles: ResultadoImpugnacion[] =
+    tiposImpugnacion.find((t) => t.clave === form.tipo_impugnacion)?.resultados || [];
 
   useEffect(() => {
     async function load() {
@@ -107,6 +117,33 @@ export default function CapturaPage() {
     load();
   }, [supabase]);
 
+  // Load impugnación catalogs
+  useEffect(() => {
+    async function loadCatalogos() {
+      try {
+        const res = await fetch("/api/catalogos/impugnacion");
+        const json = await res.json();
+        if (json.data) setTiposImpugnacion(json.data);
+      } catch {
+        // Fallback silently for catalogs
+      }
+    }
+    loadCatalogos();
+  }, []);
+
+  // Track if selected resultado is favorable
+  const updateResultadoFavorable = useCallback(
+    (resultadoClave: string) => {
+      if (!resultadoClave) {
+        setResultadosFavorable(null);
+        return;
+      }
+      const resultado = resultadosDisponibles.find((r) => r.clave === resultadoClave);
+      setResultadosFavorable(resultado?.favorable_profepa ?? null);
+    },
+    [resultadosDisponibles]
+  );
+
   function updateField(field: string, value: string) {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
@@ -121,17 +158,36 @@ export default function CapturaPage() {
         next.fecha_impugnacion = "";
         next.resultado_impugnacion = "";
       }
+      if (field === "tipo_impugnacion") {
+        // Clear resultado when tipo changes
+        next.resultado_impugnacion = "";
+      }
       if (field === "enviada_a_cobro" && value === "false") {
         next.oficio_cobro = "";
       }
+      // Reset infractor fields when tipo_persona changes
+      if (field === "tipo_persona") {
+        if (value === "fisica") {
+          next.razon_social = "";
+        } else if (value === "moral") {
+          next.nombre_infractor = "";
+          next.apellido_paterno = "";
+          next.apellido_materno = "";
+        }
+      }
       return next;
     });
+
+    if (field === "resultado_impugnacion") {
+      updateResultadoFavorable(value);
+    }
   }
 
   function resetForm() {
     setForm({ ...INITIAL_FORM });
     setError(null);
     setSuccess(null);
+    setResultadosFavorable(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -139,19 +195,6 @@ export default function CapturaPage() {
     setError(null);
     setSuccess(null);
 
-    // Validations
-    if (!form.numero_expediente.trim()) {
-      setError("El número de expediente es obligatorio.");
-      return;
-    }
-    if (!form.materia) {
-      setError("Seleccione una materia.");
-      return;
-    }
-    if (!form.nombre_infractor.trim()) {
-      setError("El nombre del infractor es obligatorio.");
-      return;
-    }
     if (!profile?.orpa_id) {
       setError("No tiene una ORPA asignada. Contacte al administrador.");
       return;
@@ -163,9 +206,24 @@ export default function CapturaPage() {
       orpa_id: profile.orpa_id,
       numero_expediente: form.numero_expediente.trim().toUpperCase(),
       materia: form.materia || null,
-      nombre_infractor: form.nombre_infractor.trim().toUpperCase(),
-      rfc_infractor: form.rfc_infractor.trim().toUpperCase() || null,
       tipo_persona: form.tipo_persona || null,
+      nombre_infractor:
+        form.tipo_persona === "fisica"
+          ? form.nombre_infractor.trim().toUpperCase()
+          : "",
+      apellido_paterno:
+        form.tipo_persona === "fisica"
+          ? form.apellido_paterno.trim().toUpperCase() || null
+          : null,
+      apellido_materno:
+        form.tipo_persona === "fisica"
+          ? form.apellido_materno.trim().toUpperCase() || null
+          : null,
+      razon_social:
+        form.tipo_persona === "moral"
+          ? form.razon_social.trim().toUpperCase() || null
+          : null,
+      rfc_infractor: form.rfc_infractor.trim().toUpperCase() || null,
       domicilio_infractor: form.domicilio_infractor.trim() || null,
       giro_actividad: form.giro_actividad.trim() || null,
       articulo_infringido: form.articulo_infringido.trim() || null,
@@ -222,6 +280,7 @@ export default function CapturaPage() {
           `Expediente ${body.numero_expediente} registrado exitosamente.`
         );
         setForm({ ...INITIAL_FORM });
+        setResultadosFavorable(null);
       }
     } catch {
       setError("Error de conexión. Intente de nuevo.");
@@ -229,6 +288,9 @@ export default function CapturaPage() {
       setSaving(false);
     }
   }
+
+  // Cobro is only enabled when resultado is favorable to PROFEPA or no impugnación
+  const cobroHabilitado = form.impugnado === "false" || resultadosFavorable === true;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -313,46 +375,58 @@ export default function CapturaPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>No. de Acta</Label>
+              <Label>
+                No. de Acta <span className="text-destructive">*</span>
+              </Label>
               <Input
                 placeholder="Ej: PFPA/10.2/3S.5/0001-A"
                 value={form.numero_acta}
                 onChange={(e) => updateField("numero_acta", e.target.value)}
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Fecha del Acta</Label>
+              <Label>
+                Fecha del acta de inspección <span className="text-destructive">*</span>
+              </Label>
               <Input
                 type="date"
                 value={form.fecha_acta}
                 onChange={(e) => updateField("fecha_acta", e.target.value)}
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>No. de Resolución</Label>
+              <Label>
+                No. de Resolución <span className="text-destructive">*</span>
+              </Label>
               <Input
                 value={form.numero_resolucion}
                 onChange={(e) =>
                   updateField("numero_resolucion", e.target.value)
                 }
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Fecha Resolución</Label>
+              <Label>
+                Fecha de la resolución administrativa <span className="text-destructive">*</span>
+              </Label>
               <Input
                 type="date"
                 value={form.fecha_resolucion}
                 onChange={(e) =>
                   updateField("fecha_resolucion", e.target.value)
                 }
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Fecha Notificación</Label>
+              <Label>Fecha de notificación al infractor</Label>
               <Input
                 type="date"
                 value={form.fecha_notificacion}
@@ -372,21 +446,8 @@ export default function CapturaPage() {
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>
-                Nombre del Infractor{" "}
-                <span className="text-destructive">*</span>
+                Tipo de Persona <span className="text-destructive">*</span>
               </Label>
-              <Input
-                placeholder="Nombre completo o razón social"
-                value={form.nombre_infractor}
-                onChange={(e) =>
-                  updateField("nombre_infractor", e.target.value)
-                }
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tipo de Persona</Label>
               <Select
                 value={form.tipo_persona}
                 onValueChange={(v) => updateField("tipo_persona", v || "")}
@@ -416,25 +477,97 @@ export default function CapturaPage() {
               />
             </div>
 
+            {/* Persona Física fields */}
+            {form.tipo_persona === "fisica" && (
+              <>
+                <div className="space-y-2">
+                  <Label>
+                    Nombre(s) <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Nombre(s)"
+                    value={form.nombre_infractor}
+                    onChange={(e) =>
+                      updateField("nombre_infractor", e.target.value)
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    Apellido Paterno <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    placeholder="Apellido paterno"
+                    value={form.apellido_paterno}
+                    onChange={(e) =>
+                      updateField("apellido_paterno", e.target.value)
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Apellido Materno</Label>
+                  <Input
+                    placeholder="Apellido materno"
+                    value={form.apellido_materno}
+                    onChange={(e) =>
+                      updateField("apellido_materno", e.target.value)
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Persona Moral fields */}
+            {form.tipo_persona === "moral" && (
+              <div className="sm:col-span-2 space-y-2">
+                <Label>
+                  Razón Social <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  placeholder="Razón social de la empresa"
+                  value={form.razon_social}
+                  onChange={(e) =>
+                    updateField("razon_social", e.target.value)
+                  }
+                  required
+                />
+              </div>
+            )}
+
+            {/* Prompt to select tipo_persona */}
+            {!form.tipo_persona && (
+              <div className="sm:col-span-2 p-3 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground">
+                Seleccione el tipo de persona para mostrar los campos del infractor.
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label>Giro / Actividad</Label>
+              <Label>
+                Giro / Actividad <span className="text-destructive">*</span>
+              </Label>
               <Input
                 placeholder="Actividad económica"
                 value={form.giro_actividad}
                 onChange={(e) =>
                   updateField("giro_actividad", e.target.value)
                 }
+                required
               />
             </div>
 
             <div className="sm:col-span-2 space-y-2">
-              <Label>Domicilio</Label>
+              <Label>
+                Domicilio <span className="text-destructive">*</span>
+              </Label>
               <Input
                 placeholder="Domicilio del infractor"
                 value={form.domicilio_infractor}
                 onChange={(e) =>
                   updateField("domicilio_infractor", e.target.value)
                 }
+                required
               />
             </div>
           </CardContent>
@@ -449,18 +582,23 @@ export default function CapturaPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Artículo Infringido</Label>
+              <Label>
+                Artículo Infringido <span className="text-destructive">*</span>
+              </Label>
               <Input
                 placeholder="Ej: Art. 171 LGEEPA"
                 value={form.articulo_infringido}
                 onChange={(e) =>
                   updateField("articulo_infringido", e.target.value)
                 }
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Monto de la Multa (MXN)</Label>
+              <Label>
+                Monto de la Multa (MXN) <span className="text-destructive">*</span>
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -468,11 +606,14 @@ export default function CapturaPage() {
                 placeholder="0.00"
                 value={form.monto_multa}
                 onChange={(e) => updateField("monto_multa", e.target.value)}
+                required
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Días UME</Label>
+              <Label>
+                Días UME <span className="text-destructive">*</span>
+              </Label>
               <Input
                 type="number"
                 min="0"
@@ -480,11 +621,14 @@ export default function CapturaPage() {
                 placeholder="0"
                 value={form.dias_ume}
                 onChange={(e) => updateField("dias_ume", e.target.value)}
+                required
               />
             </div>
 
             <div className="sm:col-span-2 space-y-2">
-              <Label>Descripción de la Infracción</Label>
+              <Label>
+                Descripción de la Infracción <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 placeholder="Breve descripción de la infracción cometida..."
                 rows={3}
@@ -492,6 +636,7 @@ export default function CapturaPage() {
                 onChange={(e) =>
                   updateField("descripcion_infraccion", e.target.value)
                 }
+                required
               />
             </div>
           </CardContent>
@@ -607,16 +752,16 @@ export default function CapturaPage() {
                       <SelectValue placeholder="Seleccionar" />
                     </SelectTrigger>
                     <SelectContent>
-                      {TIPOS_IMPUGNACION.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
+                      {tiposImpugnacion.map((t) => (
+                        <SelectItem key={t.clave} value={t.clave}>
+                          {t.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Fecha de Impugnación</Label>
+                  <Label>Fecha de impugnación</Label>
                   <Input
                     type="date"
                     value={form.fecha_impugnacion}
@@ -632,18 +777,28 @@ export default function CapturaPage() {
                     onValueChange={(v) =>
                       updateField("resultado_impugnacion", v || "")
                     }
+                    disabled={!form.tipo_impugnacion}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
+                      <SelectValue placeholder={form.tipo_impugnacion ? "Seleccionar resultado" : "Seleccione tipo primero"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {RESULTADOS_IMPUGNACION.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
+                      {resultadosDisponibles.map((r) => (
+                        <SelectItem key={r.clave} value={r.clave}>
+                          {r.nombre}
+                          {r.favorable_profepa && (
+                            <span className="ml-1 text-xs text-emerald-500">✓</span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {resultadosFavorable === true && (
+                    <p className="text-xs text-emerald-500">Resultado favorable a PROFEPA — cobro habilitado</p>
+                  )}
+                  {resultadosFavorable === false && (
+                    <p className="text-xs text-amber-500">Resultado no favorable a PROFEPA</p>
+                  )}
                 </div>
               </div>
             )}
@@ -654,16 +809,22 @@ export default function CapturaPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Cobro y Documentación</CardTitle>
+            {!cobroHabilitado && (
+              <CardDescription className="text-amber-500">
+                La sección de cobro se habilita cuando no hay impugnación o el resultado es favorable a PROFEPA.
+              </CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>¿Enviada a cobro?</Label>
                 <Select
-                  value={form.enviada_a_cobro}
+                  value={cobroHabilitado ? form.enviada_a_cobro : "false"}
                   onValueChange={(v) =>
                     updateField("enviada_a_cobro", v || "false")
                   }
+                  disabled={!cobroHabilitado}
                 >
                   <SelectTrigger>
                     <SelectValue />

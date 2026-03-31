@@ -38,6 +38,9 @@ export interface IExpediente {
   numero_acta: string | null;
   fecha_acta: string | null;
   nombre_infractor: string;
+  apellido_paterno: string | null;
+  apellido_materno: string | null;
+  razon_social: string | null;
   rfc_infractor: string | null;
   domicilio_infractor: string | null;
   tipo_persona: TipoPersona | null;
@@ -118,8 +121,56 @@ export interface IExpedienteFilters {
   estatus_id?: number;
   pagado?: boolean;
   impugnado?: boolean;
+  enviada_a_cobro?: boolean;
   fecha_desde?: string;
   fecha_hasta?: string;
+  fecha_notificacion_desde?: string;
+  fecha_notificacion_hasta?: string;
   busqueda?: string;
   materia?: string;
+  tipo_impugnacion?: string;
+  resultado_impugnacion?: string;
+  tipo_persona?: TipoPersona;
+}
+
+// Catálogos de impugnación
+export interface ITipoImpugnacion {
+  id: number;
+  clave: string;
+  nombre: string;
+  orden: number;
+  resultados: IResultadoImpugnacion[];
+}
+
+export interface IResultadoImpugnacion {
+  id: number;
+  tipo_impugnacion_clave: string;
+  clave: string;
+  nombre: string;
+  favorable_profepa: boolean;
+  orden: number;
+}
+
+// Alertas
+export type TipoAlerta = 'notificacion' | 'cobro';
+
+export interface IAlerta {
+  expediente_id: string;
+  numero_expediente: string;
+  orpa_nombre: string;
+  orpa_clave: string;
+  tipo_alerta: TipoAlerta;
+  fecha_referencia: string; // fecha_resolucion o fecha_notificacion
+  fecha_limite: string;
+  dias_restantes: number; // negativo = vencido
+  vencido: boolean;
+  monto_multa: number | null;
+}
+
+export interface IAlertasResumen {
+  pendientes_notificacion: number;
+  vencidos_notificacion: number;
+  pendientes_cobro: number;
+  vencidos_cobro: number;
+  total: number;
 }

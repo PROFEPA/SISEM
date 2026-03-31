@@ -69,6 +69,11 @@ export default function ExpedientesPage() {
   const [pagado, setPagado] = useState<string>("");
   const [impugnado, setImpugnado] = useState<string>("");
   const [materia, setMateria] = useState<string>("");
+  const [enviadaACobro, setEnviadaACobro] = useState<string>("");
+  const [tipoImpugnacion, setTipoImpugnacion] = useState<string>("");
+  const [tipoPersona, setTipoPersona] = useState<string>("");
+  const [fechaNotifDesde, setFechaNotifDesde] = useState<string>("");
+  const [fechaNotifHasta, setFechaNotifHasta] = useState<string>("");
 
   const fetchExpedientes = useCallback(async () => {
     setLoading(true);
@@ -81,13 +86,18 @@ export default function ExpedientesPage() {
     if (pagado) params.set("pagado", pagado);
     if (impugnado) params.set("impugnado", impugnado);
     if (materia) params.set("materia", materia);
+    if (enviadaACobro) params.set("enviada_a_cobro", enviadaACobro);
+    if (tipoImpugnacion) params.set("tipo_impugnacion", tipoImpugnacion);
+    if (tipoPersona) params.set("tipo_persona", tipoPersona);
+    if (fechaNotifDesde) params.set("fecha_notificacion_desde", fechaNotifDesde);
+    if (fechaNotifHasta) params.set("fecha_notificacion_hasta", fechaNotifHasta);
 
     const res = await fetch(`/api/expedientes?${params.toString()}`);
     const json = await res.json();
     setExpedientes(json.data || []);
     setTotal(json.total || 0);
     setLoading(false);
-  }, [page, pageSize, busqueda, orpaId, pagado, impugnado, materia]);
+  }, [page, pageSize, busqueda, orpaId, pagado, impugnado, materia, enviadaACobro, tipoImpugnacion, tipoPersona, fechaNotifDesde, fechaNotifHasta]);
 
   useEffect(() => {
     fetchExpedientes();
@@ -116,6 +126,11 @@ export default function ExpedientesPage() {
     setPagado("");
     setImpugnado("");
     setMateria("");
+    setEnviadaACobro("");
+    setTipoImpugnacion("");
+    setTipoPersona("");
+    setFechaNotifDesde("");
+    setFechaNotifHasta("");
     setPage(1);
   }
 
@@ -127,31 +142,75 @@ export default function ExpedientesPage() {
     if (pagado) params.set("pagado", pagado);
     if (impugnado) params.set("impugnado", impugnado);
     if (materia) params.set("materia", materia);
+    if (enviadaACobro) params.set("enviada_a_cobro", enviadaACobro);
+    if (tipoImpugnacion) params.set("tipo_impugnacion", tipoImpugnacion);
+    if (tipoPersona) params.set("tipo_persona", tipoPersona);
+    if (fechaNotifDesde) params.set("fecha_notificacion_desde", fechaNotifDesde);
+    if (fechaNotifHasta) params.set("fecha_notificacion_hasta", fechaNotifHasta);
 
     const res = await fetch(`/api/expedientes?${params.toString()}`);
     const json = await res.json();
-    const rows = (json.data || []).map((exp: IExpediente) => ({
+    const data = json.data || [];
+    const rows = data.map((exp: IExpediente) => ({
       "No. Expediente": exp.numero_expediente,
       ORPA: exp.orpa?.nombre || "",
       Materia: exp.materia || "",
+      "Tipo Persona": exp.tipo_persona || "",
+      "Nombre Infractor": exp.nombre_infractor || "",
+      "Apellido Paterno": exp.apellido_paterno || "",
+      "Apellido Materno": exp.apellido_materno || "",
+      "Razón Social": exp.razon_social || "",
+      RFC: exp.rfc_infractor || "",
+      Domicilio: exp.domicilio_infractor || "",
+      "Giro/Actividad": exp.giro_actividad || "",
+      "No. Acta": exp.numero_acta || "",
+      "Fecha Acta": exp.fecha_acta || "",
+      "No. Resolución": exp.numero_resolucion || "",
       "Fecha Resolución": exp.fecha_resolucion || "",
+      "Fecha Notificación": exp.fecha_notificacion || "",
+      "Artículo Infringido": exp.articulo_infringido || "",
+      "Descripción Infracción": exp.descripcion_infraccion || "",
       "Monto Multa": exp.monto_multa,
+      "Días UME": exp.dias_ume,
       Pagado: exp.pagado ? "SI" : "NO",
       "Fecha Pago": exp.fecha_pago || "",
+      "Monto Pagado": exp.monto_pagado,
+      "Folio Pago": exp.folio_pago || "",
       Impugnado: exp.impugnado ? "SI" : "NO",
       "Tipo Impugnación": exp.tipo_impugnacion || "",
+      "Fecha Impugnación": exp.fecha_impugnacion || "",
       "Resultado Impugnación": exp.resultado_impugnacion || "",
       "Enviada a Cobro": exp.enviada_a_cobro ? "SI" : "NO",
+      "Oficio Cobro": exp.oficio_cobro || "",
+      "Doc. Anexa": exp.documentacion_anexa ? "SI" : "NO",
+      Observaciones: exp.observaciones || "",
     }));
 
-    const ws = XLSX.utils.json_to_sheet(rows);
+    // Summary sheet
+    const totalMonto = data.reduce((s: number, e: IExpediente) => s + (e.monto_multa || 0), 0);
+    const totalPagado = data.filter((e: IExpediente) => e.pagado).length;
+    const totalImpugnado = data.filter((e: IExpediente) => e.impugnado).length;
+    const summary = [
+      { Concepto: "Total Expedientes", Valor: data.length },
+      { Concepto: "Monto Total", Valor: totalMonto },
+      { Concepto: "Pagados", Valor: totalPagado },
+      { Concepto: "Impugnados", Valor: totalImpugnado },
+      { Concepto: "Enviados a Cobro", Valor: data.filter((e: IExpediente) => e.enviada_a_cobro).length },
+    ];
+
     const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, "Expedientes");
-    XLSX.writeFile(wb, `SISEM_Expedientes_${new Date().toISOString().split("T")[0]}.xlsx`);
+    const wsSummary = XLSX.utils.json_to_sheet(summary);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Resumen");
+
+    const filterTag = [materia, pagado === "true" ? "pagados" : pagado === "false" ? "nopagados" : ""].filter(Boolean).join("_");
+    const fileName = `SISEM_Expedientes_${new Date().toISOString().split("T")[0]}${filterTag ? "_" + filterTag : ""}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }
 
   const totalPages = Math.ceil(total / pageSize);
-  const hasActiveFilters = busqueda || orpaId || pagado || impugnado || materia;
+  const hasActiveFilters = busqueda || orpaId || pagado || impugnado || materia || enviadaACobro || tipoImpugnacion || tipoPersona || fechaNotifDesde || fechaNotifHasta;
 
   return (
     <div className="space-y-4">
@@ -233,6 +292,7 @@ export default function ExpedientesPage() {
                   <SelectItem value="IMPACTO AMBIENTAL">Impacto Ambiental</SelectItem>
                   <SelectItem value="VIDA SILVESTRE">Vida Silvestre</SelectItem>
                   <SelectItem value="ZOFEMAT">ZOFEMAT</SelectItem>
+                  <SelectItem value="RECURSOS MARINOS">Recursos Marinos</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -257,6 +317,63 @@ export default function ExpedientesPage() {
                   <SelectItem value="false">No impugnados</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Select value={enviadaACobro} onValueChange={(v) => { setEnviadaACobro(!v || v === "all" ? "" : v); setPage(1); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Enviada a cobro" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="true">Enviados</SelectItem>
+                  <SelectItem value="false">No enviados</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={tipoImpugnacion} onValueChange={(v) => { setTipoImpugnacion(!v || v === "all" ? "" : v); setPage(1); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo impugnación" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los tipos</SelectItem>
+                  <SelectItem value="RECURSO_REVISION">Recurso de Revisión</SelectItem>
+                  <SelectItem value="JUICIO_NULIDAD">Juicio de Nulidad</SelectItem>
+                  <SelectItem value="AMPARO">Amparo</SelectItem>
+                  <SelectItem value="CONMUTACION">Conmutación</SelectItem>
+                  <SelectItem value="RECURSO_RECONSIDERACION">Recurso de Reconsideración</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={tipoPersona} onValueChange={(v) => { setTipoPersona(!v || v === "all" ? "" : v); setPage(1); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo persona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="fisica">Persona Física</SelectItem>
+                  <SelectItem value="moral">Persona Moral</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs text-muted-foreground">Notif. desde</label>
+                  <Input
+                    type="date"
+                    value={fechaNotifDesde}
+                    onChange={(e) => { setFechaNotifDesde(e.target.value); setPage(1); }}
+                    className="h-9"
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs text-muted-foreground">Notif. hasta</label>
+                  <Input
+                    type="date"
+                    value={fechaNotifHasta}
+                    onChange={(e) => { setFechaNotifHasta(e.target.value); setPage(1); }}
+                    className="h-9"
+                  />
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
@@ -274,6 +391,7 @@ export default function ExpedientesPage() {
                   <TableHead>Materia</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
                   <TableHead>F. Resolución</TableHead>
+                  <TableHead>F. Notificación</TableHead>
                   <TableHead>Pagado</TableHead>
                   <TableHead>Impugnado</TableHead>
                   <TableHead>Cobro</TableHead>
@@ -284,7 +402,7 @@ export default function ExpedientesPage() {
                 {loading ? (
                   Array.from({ length: 10 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 9 }).map((_, j) => (
+                      {Array.from({ length: 10 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-4 w-full" />
                         </TableCell>
@@ -293,7 +411,7 @@ export default function ExpedientesPage() {
                   ))
                 ) : expedientes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       No se encontraron expedientes
                     </TableCell>
                   </TableRow>
@@ -316,6 +434,9 @@ export default function ExpedientesPage() {
                       </TableCell>
                       <TableCell className="text-xs">
                         {formatDate(exp.fecha_resolucion)}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {formatDate(exp.fecha_notificacion)}
                       </TableCell>
                       <TableCell>
                         <Badge

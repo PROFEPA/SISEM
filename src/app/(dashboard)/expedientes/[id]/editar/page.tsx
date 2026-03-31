@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -14,10 +14,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Save } from "lucide-react";
 import type { IExpediente, IOrpa } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+
+interface TipoImpugnacion {
+  id: number;
+  clave: string;
+  nombre: string;
+  resultados: ResultadoImpugnacion[];
+}
+
+interface ResultadoImpugnacion {
+  id: number;
+  clave: string;
+  nombre: string;
+  favorable_profepa: boolean;
+}
 
 export default function EditarExpedientePage() {
   const { id } = useParams<{ id: string }>();
@@ -28,12 +43,18 @@ export default function EditarExpedientePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tiposImpugnacion, setTiposImpugnacion] = useState<TipoImpugnacion[]>([]);
+  const [resultadosFavorable, setResultadosFavorable] = useState<boolean | null>(null);
 
   // Form state
   const [form, setForm] = useState({
     numero_expediente: "",
     materia: "",
+    tipo_persona: "",
     nombre_infractor: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    razon_social: "",
     rfc_infractor: "",
     monto_multa: "",
     fecha_resolucion: "",
@@ -50,6 +71,47 @@ export default function EditarExpedientePage() {
     observaciones: "",
   });
 
+  // Resultados filtrados por tipo de impugnación seleccionado
+  const resultadosDisponibles: ResultadoImpugnacion[] =
+    tiposImpugnacion.find((t) => t.clave === form.tipo_impugnacion)?.resultados || [];
+
+  // Cobro habilitado: no impugnado, o resultado favorable a PROFEPA
+  const cobroHabilitado = !form.impugnado || resultadosFavorable === true;
+
+  // Track if selected resultado is favorable
+  const updateResultadoFavorable = useCallback(
+    (resultadoClave: string) => {
+      if (!resultadoClave) {
+        setResultadosFavorable(null);
+        return;
+      }
+      const resultado = resultadosDisponibles.find((r) => r.clave === resultadoClave);
+      setResultadosFavorable(resultado?.favorable_profepa ?? null);
+    },
+    [resultadosDisponibles]
+  );
+
+  // Load impugnación catalogs
+  useEffect(() => {
+    async function loadCatalogos() {
+      try {
+        const res = await fetch("/api/catalogos/impugnacion");
+        const json = await res.json();
+        if (json.data) setTiposImpugnacion(json.data);
+      } catch {
+        // Fallback silently
+      }
+    }
+    loadCatalogos();
+  }, []);
+
+  // Sync resultadosFavorable when catalogs load and expediente already has resultado
+  useEffect(() => {
+    if (form.resultado_impugnacion && resultadosDisponibles.length > 0) {
+      updateResultadoFavorable(form.resultado_impugnacion);
+    }
+  }, [resultadosDisponibles, form.resultado_impugnacion, updateResultadoFavorable]);
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/expedientes/${id}`).then((r) => r.json()),
@@ -61,7 +123,11 @@ export default function EditarExpedientePage() {
         setForm({
           numero_expediente: exp.numero_expediente || "",
           materia: exp.materia || "",
+          tipo_persona: exp.tipo_persona || "",
           nombre_infractor: exp.nombre_infractor || "",
+          apellido_paterno: exp.apellido_paterno || "",
+          apellido_materno: exp.apellido_materno || "",
+          razon_social: exp.razon_social || "",
           rfc_infractor: exp.rfc_infractor || "",
           monto_multa: exp.monto_multa?.toString() || "",
           fecha_resolucion: exp.fecha_resolucion || "",
@@ -96,12 +162,18 @@ export default function EditarExpedientePage() {
       fecha_notificacion: form.fecha_notificacion || null,
       fecha_pago: form.fecha_pago || null,
       materia: form.materia || null,
+      tipo_persona: form.tipo_persona || null,
       rfc_infractor: form.rfc_infractor || null,
       tipo_impugnacion: form.tipo_impugnacion || null,
       resultado_impugnacion: form.resultado_impugnacion || null,
       oficio_cobro: form.oficio_cobro || null,
       folio_pago: form.folio_pago || null,
       observaciones: form.observaciones || null,
+      // Clear infractor fields based on tipo_persona
+      nombre_infractor: form.tipo_persona === "moral" ? "" : (form.nombre_infractor || null),
+      apellido_paterno: form.tipo_persona === "moral" ? "" : (form.apellido_paterno || null),
+      apellido_materno: form.tipo_persona === "moral" ? "" : (form.apellido_materno || null),
+      razon_social: form.tipo_persona === "fisica" ? "" : (form.razon_social || null),
     };
 
     const res = await fetch(`/api/expedientes/${id}`, {
@@ -157,7 +229,7 @@ export default function EditarExpedientePage() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>No. Expediente</Label>
+              <Label>No. Expediente *</Label>
               <Input
                 value={form.numero_expediente}
                 onChange={(e) => setForm({ ...form, numero_expediente: e.target.value })}
@@ -165,7 +237,7 @@ export default function EditarExpedientePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Materia</Label>
+              <Label>Materia *</Label>
               <Select value={form.materia || ""} onValueChange={(v) => setForm({ ...form, materia: v || "" })}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
@@ -174,16 +246,78 @@ export default function EditarExpedientePage() {
                   <SelectItem value="IMPACTO AMBIENTAL">Impacto Ambiental</SelectItem>
                   <SelectItem value="VIDA SILVESTRE">Vida Silvestre</SelectItem>
                   <SelectItem value="ZOFEMAT">ZOFEMAT</SelectItem>
+                  <SelectItem value="RECURSOS MARINOS">Recursos Marinos</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Tipo de persona */}
             <div className="space-y-2">
-              <Label>Nombre del Infractor</Label>
-              <Input
-                value={form.nombre_infractor}
-                onChange={(e) => setForm({ ...form, nombre_infractor: e.target.value })}
-              />
+              <Label>Tipo de persona *</Label>
+              <Select
+                value={form.tipo_persona || ""}
+                onValueChange={(v) => {
+                  const val = v ?? "";
+                  const next = { ...form, tipo_persona: val };
+                  if (val === "fisica") {
+                    next.razon_social = "";
+                  } else if (val === "moral") {
+                    next.nombre_infractor = "";
+                    next.apellido_paterno = "";
+                    next.apellido_materno = "";
+                  }
+                  setForm(next);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fisica">Persona Física</SelectItem>
+                  <SelectItem value="moral">Persona Moral</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Persona Física fields */}
+            {form.tipo_persona === "fisica" && (
+              <>
+                <div className="space-y-2">
+                  <Label>Nombre *</Label>
+                  <Input
+                    value={form.nombre_infractor}
+                    onChange={(e) => setForm({ ...form, nombre_infractor: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Apellido Paterno *</Label>
+                  <Input
+                    value={form.apellido_paterno}
+                    onChange={(e) => setForm({ ...form, apellido_paterno: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Apellido Materno</Label>
+                  <Input
+                    value={form.apellido_materno}
+                    onChange={(e) => setForm({ ...form, apellido_materno: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Persona Moral fields */}
+            {form.tipo_persona === "moral" && (
+              <div className="sm:col-span-2 space-y-2">
+                <Label>Razón Social *</Label>
+                <Input
+                  value={form.razon_social}
+                  onChange={(e) => setForm({ ...form, razon_social: e.target.value })}
+                  required
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>RFC</Label>
               <Input
@@ -192,24 +326,26 @@ export default function EditarExpedientePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Monto Multa</Label>
+              <Label>Monto Multa *</Label>
               <Input
                 type="number"
                 step="0.01"
                 value={form.monto_multa}
                 onChange={(e) => setForm({ ...form, monto_multa: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label>Fecha Resolución</Label>
+              <Label>Fecha de la resolución administrativa *</Label>
               <Input
                 type="date"
                 value={form.fecha_resolucion}
                 onChange={(e) => setForm({ ...form, fecha_resolucion: e.target.value })}
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label>Fecha Notificación</Label>
+              <Label>Fecha de notificación al infractor</Label>
               <Input
                 type="date"
                 value={form.fecha_notificacion}
@@ -266,14 +402,22 @@ export default function EditarExpedientePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Impugnación y Cobro</CardTitle>
+            <CardTitle className="text-base">Impugnación</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Impugnado</Label>
               <Select
                 value={form.impugnado ? "true" : "false"}
-                onValueChange={(v) => setForm({ ...form, impugnado: v === "true" })}
+                onValueChange={(v) => {
+                  const imp = v === "true";
+                  setForm({
+                    ...form,
+                    impugnado: imp,
+                    ...(imp ? {} : { tipo_impugnacion: "", resultado_impugnacion: "" }),
+                  });
+                  if (!imp) setResultadosFavorable(null);
+                }}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -282,30 +426,72 @@ export default function EditarExpedientePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Tipo de Impugnación</Label>
-              <Select value={form.tipo_impugnacion || ""} onValueChange={(v) => setForm({ ...form, tipo_impugnacion: v || "" })}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="RECURSO_REVISION">Recurso de Revisión</SelectItem>
-                  <SelectItem value="JUICIO_NULIDAD">Juicio de Nulidad</SelectItem>
-                  <SelectItem value="AMPARO">Amparo</SelectItem>
-                  <SelectItem value="CONMUTACION">Conmutación</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Resultado</Label>
-              <Input
-                value={form.resultado_impugnacion}
-                onChange={(e) => setForm({ ...form, resultado_impugnacion: e.target.value })}
-              />
-            </div>
+            {form.impugnado && (
+              <>
+                <div className="space-y-2">
+                  <Label>Tipo de Impugnación</Label>
+                  <Select
+                    value={form.tipo_impugnacion || ""}
+                    onValueChange={(v) => {
+                      setForm({ ...form, tipo_impugnacion: v || "", resultado_impugnacion: "" });
+                      setResultadosFavorable(null);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>
+                      {tiposImpugnacion.map((t) => (
+                        <SelectItem key={t.clave} value={t.clave}>{t.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Resultado</Label>
+                  <Select
+                    value={form.resultado_impugnacion || ""}
+                    onValueChange={(v) => {
+                      setForm({ ...form, resultado_impugnacion: v || "" });
+                      updateResultadoFavorable(v ?? "");
+                    }}
+                    disabled={!form.tipo_impugnacion}
+                  >
+                    <SelectTrigger><SelectValue placeholder={form.tipo_impugnacion ? "Seleccionar" : "Primero seleccione tipo"} /></SelectTrigger>
+                    <SelectContent>
+                      {resultadosDisponibles.map((r) => (
+                        <SelectItem key={r.clave} value={r.clave}>{r.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {resultadosFavorable !== null && (
+                    <Badge variant={resultadosFavorable ? "default" : "destructive"} className="mt-1">
+                      {resultadosFavorable ? "Favorable a PROFEPA" : "Desfavorable"}
+                    </Badge>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Cobro</CardTitle>
+            {!cobroHabilitado && (
+              <CardDescription className="text-amber-600">
+                Cobro no habilitado — la multa está siendo impugnada sin resultado favorable.
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Enviada a cobro</Label>
               <Select
                 value={form.enviada_a_cobro ? "true" : "false"}
-                onValueChange={(v) => setForm({ ...form, enviada_a_cobro: v === "true" })}
+                onValueChange={(v) => {
+                  const ec = v === "true";
+                  setForm({ ...form, enviada_a_cobro: ec, ...(ec ? {} : { oficio_cobro: "" }) });
+                }}
+                disabled={!cobroHabilitado}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -314,13 +500,15 @@ export default function EditarExpedientePage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Oficio de Cobro</Label>
-              <Input
-                value={form.oficio_cobro}
-                onChange={(e) => setForm({ ...form, oficio_cobro: e.target.value })}
-              />
-            </div>
+            {form.enviada_a_cobro && (
+              <div className="space-y-2">
+                <Label>Oficio de Cobro</Label>
+                <Input
+                  value={form.oficio_cobro}
+                  onChange={(e) => setForm({ ...form, oficio_cobro: e.target.value })}
+                />
+              </div>
+            )}
             <div className="sm:col-span-2 space-y-2">
               <Label>Observaciones</Label>
               <Input

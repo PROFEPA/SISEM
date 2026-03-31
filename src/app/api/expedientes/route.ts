@@ -34,6 +34,12 @@ export async function GET(request: NextRequest) {
   const fechaDesde = searchParams.get("fecha_desde");
   const fechaHasta = searchParams.get("fecha_hasta");
   const materia = searchParams.get("materia");
+  const enviadaACobro = searchParams.get("enviada_a_cobro");
+  const tipoImpugnacion = searchParams.get("tipo_impugnacion");
+  const resultadoImpugnacion = searchParams.get("resultado_impugnacion");
+  const tipoPersona = searchParams.get("tipo_persona");
+  const fechaNotifDesde = searchParams.get("fecha_notificacion_desde");
+  const fechaNotifHasta = searchParams.get("fecha_notificacion_hasta");
   const sortByRaw = searchParams.get("sort_by") || "created_at";
   const sortBy = VALID_SORT_COLUMNS.has(sortByRaw) ? sortByRaw : "created_at";
   const sortDir = searchParams.get("sort_dir") === "asc" ? true : false;
@@ -48,13 +54,20 @@ export async function GET(request: NextRequest) {
     query = query.eq("pagado", pagado === "true");
   if (impugnado !== null && impugnado !== undefined && impugnado !== "")
     query = query.eq("impugnado", impugnado === "true");
+  if (enviadaACobro !== null && enviadaACobro !== undefined && enviadaACobro !== "")
+    query = query.eq("enviada_a_cobro", enviadaACobro === "true");
   if (materia) query = query.eq("materia", materia);
+  if (tipoImpugnacion) query = query.eq("tipo_impugnacion", tipoImpugnacion);
+  if (resultadoImpugnacion) query = query.eq("resultado_impugnacion", resultadoImpugnacion);
+  if (tipoPersona) query = query.eq("tipo_persona", tipoPersona);
   if (fechaDesde) query = query.gte("fecha_resolucion", fechaDesde);
   if (fechaHasta) query = query.lte("fecha_resolucion", fechaHasta);
+  if (fechaNotifDesde) query = query.gte("fecha_notificacion", fechaNotifDesde);
+  if (fechaNotifHasta) query = query.lte("fecha_notificacion", fechaNotifHasta);
   if (busqueda) {
     const escaped = escapeIlike(busqueda);
     query = query.or(
-      `numero_expediente.ilike.%${escaped}%,nombre_infractor.ilike.%${escaped}%`
+      `numero_expediente.ilike.%${escaped}%,nombre_infractor.ilike.%${escaped}%,razon_social.ilike.%${escaped}%`
     );
   }
 

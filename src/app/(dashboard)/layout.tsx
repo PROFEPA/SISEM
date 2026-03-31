@@ -36,6 +36,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { NotificationBell } from "@/components/ui/notification-bell";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -285,6 +286,9 @@ export default function DashboardLayout({
           <div className="hidden lg:flex items-center gap-3">
             {profile && (
               <div className="flex items-center gap-2.5">
+                <NotificationBell
+                  orpaId={profile.role === "admin" ? undefined : profile.orpa_id || undefined}
+                />
                 <div className="text-right">
                   <p className="text-sm font-medium leading-tight">{profile.nombre_completo || "Usuario"}</p>
                   <p className="text-[11px] text-muted-foreground">{ROLE_LABELS[profile.role]}</p>

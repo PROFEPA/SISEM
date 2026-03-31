@@ -40,3 +40,34 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ============================================
+# Datos sensibles y archivos de trabajo
+# ============================================
+
+# Archivos Excel con datos reales de expedientes/multas
+*.xlsx
+*.xls
+*.csv
+
+# Archivos de cuentas/credenciales
+CUENTAS_PRUEBA*
+
+# Scripts de análisis local (contienen rutas y datos)
+analyze_*.py
+compare_*.py
+investigate_*.py
+list_*.py
+
+# Backups
+*.bak
+*.backup
+*.orig
+
+# Python / entorno virtual
+.venv/
+__pycache__/
+*.pyc
+
+# Carpeta de datos originales
+Multas*/
