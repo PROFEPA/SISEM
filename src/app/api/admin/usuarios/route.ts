@@ -286,3 +286,169 @@ export async function POST(request: Request) {
     { status: 201 }
   );
 }
+
+// ── PUT — Update user profile (role, orpa, name, active, password) ──
+export async function PUT(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.error) {
+    return NextResponse.json(
+      { data: null, error: auth.error },
+      { status: auth.status }
+    );
+  }
+
+  const body = await request.json();
+  const { user_id, nombre_completo, role, orpa_id, activo, password } = body as {
+    user_id?: string;
+    nombre_completo?: string;
+    role?: string;
+    orpa_id?: string | null;
+    activo?: boolean;
+    password?: string;
+  };
+
+  if (!user_id || !UUID_PATTERN.test(user_id)) {
+    return NextResponse.json(
+      { data: null, error: "user_id inválido" },
+      { status: 400 }
+    );
+  }
+
+  if (role && !VALID_ROLES.includes(role)) {
+    return NextResponse.json(
+      { data: null, error: "Rol inválido" },
+      { status: 400 }
+    );
+  }
+
+  const normalizedOrpaId = normalizeOrpaId(orpa_id);
+
+  if (normalizedOrpaId && !UUID_PATTERN.test(normalizedOrpaId)) {
+    return NextResponse.json(
+      { data: null, error: "ORPA inválida" },
+      { status: 400 }
+    );
+  }
+
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Build profile update object only with provided fields
+  const profileUpdate: Record<string, unknown> = {};
+  if (nombre_completo !== undefined) profileUpdate.nombre_completo = nombre_completo.trim();
+  if (role !== undefined) profileUpdate.role = role;
+  if (orpa_id !== undefined) profileUpdate.orpa_id = normalizedOrpaId;
+  if (activo !== undefined) profileUpdate.activo = activo;
+
+  if (Object.keys(profileUpdate).length > 0) {
+    const { error: profileError } = await serviceClient
+      .from("profiles")
+      .update(profileUpdate)
+      .eq("id", user_id);
+
+    if (profileError) {
+      return NextResponse.json(
+        { data: null, error: `Error al actualizar perfil: ${profileError.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Update password if provided
+  if (password && password.length >= 6) {
+    const { error: authError } = await serviceClient.auth.admin.updateUserById(
+      user_id,
+      { password }
+    );
+
+    if (authError) {
+      return NextResponse.json(
+        { data: null, error: `Error al actualizar contraseña: ${authError.message}` },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json({ data: { id: user_id }, error: null });
+}
+
+// ── DELETE — Remove user from auth and profile ──
+export async function DELETE(request: Request) {
+  const auth = await requireAdmin();
+  if (auth.error) {
+    return NextResponse.json(
+      { data: null, error: auth.error },
+      { status: auth.status }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get("user_id");
+
+  if (!userId || !UUID_PATTERN.test(userId)) {
+    return NextResponse.json(
+      { data: null, error: "user_id inválido" },
+      { status: 400 }
+    );
+  }
+
+  // Prevent admin from deleting themselves
+  if (userId === auth.user!.id) {
+    return NextResponse.json(
+      { data: null, error: "No puedes eliminarte a ti mismo" },
+      { status: 400 }
+    );
+  }
+
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Check if user has expedientes
+  const { count } = await serviceClient
+    .from("expedientes")
+    .select("id", { count: "exact", head: true })
+    .eq("created_by", userId);
+
+  if (count && count > 0) {
+    return NextResponse.json(
+      {
+        data: null,
+        error: `No se puede eliminar: el usuario tiene ${count} expediente(s) registrados. Desactívalo en su lugar.`,
+      },
+      { status: 409 }
+    );
+  }
+
+  // Delete profile first (cascade from auth might not reach profiles without FK ON DELETE CASCADE... but it does exist)
+  const { error: profileError } = await serviceClient
+    .from("profiles")
+    .delete()
+    .eq("id", userId);
+
+  if (profileError) {
+    return NextResponse.json(
+      { data: null, error: `Error al eliminar perfil: ${profileError.message}` },
+      { status: 500 }
+    );
+  }
+
+  // Delete from Supabase Auth
+  const { error: authError } = await serviceClient.auth.admin.deleteUser(userId);
+
+  if (authError) {
+    return NextResponse.json(
+      { data: null, error: `Perfil eliminado pero error en auth: ${authError.message}` },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    data: { id: userId },
+    error: null,
+    message: "Usuario eliminado exitosamente",
+  });
+}
