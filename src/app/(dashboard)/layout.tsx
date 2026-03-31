@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationBell } from "@/components/ui/notification-bell";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -302,7 +303,9 @@ export default function DashboardLayout({
         </header>
 
         <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
-          {children}
+          <SectionErrorBoundary sectionName="contenido">
+            {children}
+          </SectionErrorBoundary>
         </main>
       </div>
     </div>

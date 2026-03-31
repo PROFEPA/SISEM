@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +18,12 @@ import {
   DollarSign,
   AlertTriangle,
   Truck,
+  User,
+  Building2,
+  Calendar,
+  Shield,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import type { IExpediente, IExpedienteHistorial } from "@/types";
 
@@ -53,6 +61,7 @@ export default function ExpedienteDetallePage() {
     IExpediente & { historial?: IExpedienteHistorial[] }
   | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAllHistorial, setShowAllHistorial] = useState(false);
 
   useEffect(() => {
     fetch(`/api/expedientes/${id}`)
@@ -145,9 +154,57 @@ export default function ExpedienteDetallePage() {
               <DetailRow label="No. Expediente" value={expediente.numero_expediente} />
               <DetailRow label="ORPA" value={expediente.orpa?.nombre} />
               <DetailRow label="Materia" value={expediente.materia} />
+              <DetailRow label="No. Acta" value={expediente.numero_acta} />
+              <DetailRow label="Fecha del Acta" value={formatDate(expediente.fecha_acta)} />
+              <DetailRow label="No. Resolución" value={expediente.numero_resolucion} />
               <DetailRow label="Fecha de Resolución" value={formatDate(expediente.fecha_resolucion)} />
               <DetailRow label="Fecha de Notificación" value={formatDate(expediente.fecha_notificacion)} />
               <DetailRow label="Monto de la Multa" value={formatMoney(expediente.monto_multa)} />
+              {expediente.giro_actividad && (
+                <DetailRow label="Giro / Actividad" value={expediente.giro_actividad} />
+              )}
+              {expediente.articulo_infringido && (
+                <DetailRow label="Artículo Infringido" value={expediente.articulo_infringido} />
+              )}
+              {expediente.descripcion_infraccion && (
+                <DetailRow label="Descripción de la Infracción" value={expediente.descripcion_infraccion} />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Infractor section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                {expediente.tipo_persona === "moral" ? (
+                  <Building2 className="w-4 h-4" />
+                ) : (
+                  <User className="w-4 h-4" />
+                )}
+                Datos del Infractor
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="divide-y">
+              <DetailRow
+                label="Tipo de Persona"
+                value={
+                  expediente.tipo_persona ? (
+                    <Badge variant="secondary">
+                      {expediente.tipo_persona === "moral" ? "Persona Moral" : "Persona Física"}
+                    </Badge>
+                  ) : null
+                }
+              />
+              {expediente.tipo_persona === "moral" ? (
+                <DetailRow label="Razón Social" value={expediente.razon_social} />
+              ) : (
+                <>
+                  <DetailRow label="Nombre" value={expediente.nombre_infractor} />
+                  <DetailRow label="Apellido Paterno" value={expediente.apellido_paterno} />
+                  <DetailRow label="Apellido Materno" value={expediente.apellido_materno} />
+                </>
+              )}
+              <DetailRow label="RFC" value={expediente.rfc_infractor} />
             </CardContent>
           </Card>
 
@@ -189,7 +246,29 @@ export default function ExpedienteDetallePage() {
                 }
               />
               <DetailRow label="Tipo de Impugnación" value={expediente.tipo_impugnacion} />
-              <DetailRow label="Resultado" value={expediente.resultado_impugnacion} />
+              <DetailRow
+                label="Resultado"
+                value={
+                  expediente.resultado_impugnacion ? (
+                    <span className="flex items-center gap-2">
+                      {expediente.resultado_impugnacion}
+                      {expediente.resultado_impugnacion.toLowerCase().includes("favorable") && (
+                        expediente.resultado_impugnacion.toLowerCase().includes("desfavorable") ? (
+                          <Badge className="bg-red-100 text-red-800 hover:bg-red-100 gap-1">
+                            <XCircle className="w-3 h-3" />
+                            Desfavorable
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-100 gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Favorable
+                          </Badge>
+                        )
+                      )}
+                    </span>
+                  ) : null
+                }
+              />
               <Separator className="my-2" />
               <DetailRow
                 label="Enviada a Cobro"
@@ -227,22 +306,45 @@ export default function ExpedienteDetallePage() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {expediente.historial.map((h) => (
-                    <div key={h.id} className="text-xs border-l-2 border-primary/30 pl-3">
-                      <p className="font-medium">
-                        {h.campo_modificado}
-                      </p>
-                      <p className="text-muted-foreground">
-                        <span className="line-through">{h.valor_anterior || "(vacío)"}</span>
-                        {" → "}
-                        <span className="font-medium text-foreground">{h.valor_nuevo}</span>
-                      </p>
-                      <p className="text-muted-foreground mt-0.5">
-                        {new Date(h.created_at).toLocaleString("es-MX")}
-                        {h.usuario && ` — ${(h.usuario as { nombre_completo?: string }).nombre_completo || "Usuario"}`}
-                      </p>
-                    </div>
-                  ))}
+                  {(showAllHistorial
+                    ? expediente.historial
+                    : expediente.historial.slice(0, 20)
+                  ).map((h) => {
+                    const campo = h.campo_modificado ?? "";
+                    const fieldIcon = campo.includes("monto") || campo.includes("pago")
+                      ? DollarSign
+                      : campo.includes("fecha")
+                        ? Calendar
+                        : campo.includes("impugn")
+                          ? Shield
+                          : FileText;
+                    const FieldIcon = fieldIcon;
+                    return (
+                      <div key={h.id} className="text-xs border-l-2 border-primary/30 pl-3">
+                        <p className="font-medium flex items-center gap-1">
+                          <FieldIcon className="w-3 h-3 text-muted-foreground" />
+                          {h.campo_modificado}
+                        </p>
+                        <p className="text-muted-foreground">
+                          <span className="line-through">{h.valor_anterior || "(vacío)"}</span>
+                          {" → "}
+                          <span className="font-medium text-foreground">{h.valor_nuevo}</span>
+                        </p>
+                        <p className="text-muted-foreground mt-0.5">
+                          {formatDistanceToNow(new Date(h.created_at), { addSuffix: true, locale: es })}
+                          {h.usuario && ` — ${(h.usuario as { nombre_completo?: string }).nombre_completo || "Usuario"}`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {!showAllHistorial && expediente.historial.length > 20 && (
+                    <button
+                      onClick={() => setShowAllHistorial(true)}
+                      className="text-xs text-primary hover:underline cursor-pointer w-full text-center pt-2"
+                    >
+                      Ver todos ({expediente.historial.length} cambios)
+                    </button>
+                  )}
                 </div>
               )}
             </CardContent>

@@ -56,6 +56,33 @@ const COLUMN_MAP: Record<string, string> = {
   "SE ANEXA DOCUMENTACIÓN": "documentacion_anexa",
   "SE ANEXA DOCUMENTACION": "documentacion_anexa",
   "OBSERVACIONES": "observaciones",
+  // v3: Infractor fields
+  "NOMBRE": "nombre_infractor",
+  "NOMBRE DEL INFRACTOR": "nombre_infractor",
+  "INFRACTOR": "nombre_infractor",
+  "NOMBRE INFRACTOR": "nombre_infractor",
+  "APELLIDO PATERNO": "apellido_paterno",
+  "AP. PATERNO": "apellido_paterno",
+  "APELLIDO MATERNO": "apellido_materno",
+  "AP. MATERNO": "apellido_materno",
+  "RAZON SOCIAL": "razon_social",
+  "RAZÓN SOCIAL": "razon_social",
+  "RFC": "rfc_infractor",
+  "RFC INFRACTOR": "rfc_infractor",
+  "R.F.C.": "rfc_infractor",
+  "TIPO PERSONA": "tipo_persona",
+  "TIPO DE PERSONA": "tipo_persona",
+  // v3: Acta/Resolución fields
+  "NO. ACTA": "numero_acta",
+  "NUMERO ACTA": "numero_acta",
+  "NÚMERO ACTA": "numero_acta",
+  "NUM. ACTA": "numero_acta",
+  "NO. RESOLUCIÓN": "numero_resolucion",
+  "NO. RESOLUCION": "numero_resolucion",
+  "NUMERO RESOLUCION": "numero_resolucion",
+  "NÚMERO RESOLUCIÓN": "numero_resolucion",
+  "NUM. RESOLUCIÓN": "numero_resolucion",
+  "NUM. RESOLUCION": "numero_resolucion",
 };
 
 // Normalización de ORPA → nombre estándar para lookup
@@ -148,6 +175,15 @@ export const expedienteRowSchema = z.object({
   oficio_cobro: z.string().nullable().optional(),
   documentacion_anexa: z.boolean().default(false),
   observaciones: z.string().nullable().optional(),
+  // v3 fields
+  nombre_infractor: z.string().nullable().optional(),
+  apellido_paterno: z.string().nullable().optional(),
+  apellido_materno: z.string().nullable().optional(),
+  razon_social: z.string().nullable().optional(),
+  rfc_infractor: z.string().nullable().optional(),
+  tipo_persona: z.string().nullable().optional(),
+  numero_acta: z.string().nullable().optional(),
+  numero_resolucion: z.string().nullable().optional(),
 });
 
 export type ExpedienteRow = z.infer<typeof expedienteRowSchema>;
@@ -255,6 +291,14 @@ function normalizeOrpa(val: unknown): string {
   if (!val) return "";
   const str = String(val).trim().toUpperCase();
   return ORPA_NORMALIZE[str] || str;
+}
+
+function normalizeTipoPersona(val: unknown): string | null {
+  if (isNullPlaceholder(val)) return null;
+  const str = String(val).trim().toUpperCase();
+  if (str === "FISICA" || str === "FÍSICA" || str === "F" || str === "PF") return "fisica";
+  if (str === "MORAL" || str === "M" || str === "PM") return "moral";
+  return null;
 }
 
 // Known valid materias
@@ -427,6 +471,29 @@ export function parseExcelBuffer(buffer: ArrayBuffer, fileName?: string): ParseR
         observaciones: isNullPlaceholder(rowData.observaciones)
           ? null
           : String(rowData.observaciones).trim(),
+        // v3 fields
+        nombre_infractor: isNullPlaceholder(rowData.nombre_infractor)
+          ? null
+          : String(rowData.nombre_infractor).trim(),
+        apellido_paterno: isNullPlaceholder(rowData.apellido_paterno)
+          ? null
+          : String(rowData.apellido_paterno).trim(),
+        apellido_materno: isNullPlaceholder(rowData.apellido_materno)
+          ? null
+          : String(rowData.apellido_materno).trim(),
+        razon_social: isNullPlaceholder(rowData.razon_social)
+          ? null
+          : String(rowData.razon_social).trim(),
+        rfc_infractor: isNullPlaceholder(rowData.rfc_infractor)
+          ? null
+          : String(rowData.rfc_infractor).trim().toUpperCase(),
+        tipo_persona: normalizeTipoPersona(rowData.tipo_persona),
+        numero_acta: isNullPlaceholder(rowData.numero_acta)
+          ? null
+          : String(rowData.numero_acta).trim(),
+        numero_resolucion: isNullPlaceholder(rowData.numero_resolucion)
+          ? null
+          : String(rowData.numero_resolucion).trim(),
       };
 
       // Si está pagado y no tiene monto_pagado, asumir monto_multa
