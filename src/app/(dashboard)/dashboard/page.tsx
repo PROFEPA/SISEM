@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -27,6 +28,9 @@ import {
   Bell,
   Eye,
   Clock,
+  Search,
+  Filter,
+  X,
 } from "lucide-react";
 import {
   BarChart,
@@ -122,6 +126,7 @@ interface PendienteRow {
   numero_expediente: string;
   orpa_nombre: string;
   orpa_id: string;
+  materia: string;
   monto_multa: number;
   fecha_referencia: string;
   fecha_limite: string;
@@ -332,6 +337,41 @@ function ChartCard({
   );
 }
 
+function SortableHead({
+  field,
+  label,
+  current,
+  dir,
+  onSort,
+  defaultDir = "asc",
+  align = "left",
+}: {
+  field: string;
+  label: string;
+  current: string;
+  dir: SortDir;
+  onSort: (field: string, defaultDir?: SortDir) => void;
+  defaultDir?: SortDir;
+  align?: "left" | "right";
+}) {
+  const active = current === field;
+  return (
+    <TableHead
+      className={`cursor-pointer select-none hover:bg-muted/50 transition-colors ${align === "right" ? "text-right" : ""}`}
+      onClick={() => onSort(field, defaultDir)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          dir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-30" />
+        )}
+      </span>
+    </TableHead>
+  );
+}
+
 // ============================================================
 // Main component
 // ============================================================
@@ -344,6 +384,73 @@ export default function DashboardPage() {
   const [sortKey, setSortKey] = useState<OrpaSortKey>("monto");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [pendLimit, setPendLimit] = useState({ notificacion: 30, cobro: 30, pago: 30 });
+
+  // Pendientes: search, filter, sort state
+  const [pendSearch, setPendSearch] = useState("");
+  const [pendOrpaFilter, setPendOrpaFilter] = useState("");
+  const [pendSemaforoFilter, setPendSemaforoFilter] = useState<"" | "rojo" | "amarillo" | "verde">("");
+  const [pendSortField, setPendSortField] = useState<string>("dias_restantes");
+  const [pendSortDir, setPendSortDir] = useState<SortDir>("asc");
+
+  const togglePendSort = useCallback((field: string, defaultDir: SortDir = "asc") => {
+    setPendSortField(prev => {
+      if (prev === field) {
+        setPendSortDir(d => d === "asc" ? "desc" : "asc");
+        return field;
+      }
+      setPendSortDir(defaultDir);
+      return field;
+    });
+  }, []);
+
+  const filterAndSortItems = useCallback((items: PendienteRow[]) => {
+    let result = items;
+
+    // Text search
+    if (pendSearch) {
+      const q = pendSearch.toLowerCase();
+      result = result.filter(r =>
+        r.numero_expediente.toLowerCase().includes(q) ||
+        r.orpa_nombre.toLowerCase().includes(q) ||
+        r.materia.toLowerCase().includes(q)
+      );
+    }
+
+    // ORPA filter
+    if (pendOrpaFilter) {
+      result = result.filter(r => r.orpa_nombre === pendOrpaFilter);
+    }
+
+    // Semáforo filter
+    if (pendSemaforoFilter) {
+      result = result.filter(r => r.semaforo === pendSemaforoFilter);
+    }
+
+    // Sort
+    const dir = pendSortDir === "asc" ? 1 : -1;
+    result = [...result].sort((a, b) => {
+      const field = pendSortField as keyof PendienteRow;
+      const va = a[field];
+      const vb = b[field];
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+
+    return result;
+  }, [pendSearch, pendOrpaFilter, pendSemaforoFilter, pendSortField, pendSortDir]);
+
+  // Get unique ORPA list from pendientes
+  const pendOrpas = useMemo(() => {
+    if (!data?.pendientes) return [];
+    const names = new Set<string>();
+    const allItems = [
+      ...data.pendientes.notificacion.items,
+      ...data.pendientes.cobro.items,
+      ...data.pendientes.pago.items,
+    ];
+    for (const item of allItems) names.add(item.orpa_nombre);
+    return Array.from(names).sort();
+  }, [data?.pendientes]);
 
   async function fetchData() {
     try {
@@ -1269,9 +1376,51 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">
               Expedientes pendientes de notificación, cobro y pago
             </p>
+
+            {/* Search and filter controls */}
+            <div className="flex flex-wrap items-center gap-2 pt-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar expediente, ORPA, materia..."
+                  value={pendSearch}
+                  onChange={(e) => setPendSearch(e.target.value)}
+                  className="h-8 pl-8 text-xs"
+                />
+              </div>
+              <select
+                value={pendOrpaFilter}
+                onChange={(e) => setPendOrpaFilter(e.target.value)}
+                className="h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Todas las ORPAs</option>
+                {pendOrpas.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+              <select
+                value={pendSemaforoFilter}
+                onChange={(e) => setPendSemaforoFilter(e.target.value as typeof pendSemaforoFilter)}
+                className="h-8 text-xs rounded-md border border-input bg-background px-2 focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Todos los estados</option>
+                <option value="rojo">🔴 Vencido</option>
+                <option value="amarillo">🟡 Por vencer</option>
+                <option value="verde">🟢 En tiempo</option>
+              </select>
+              {(pendSearch || pendOrpaFilter || pendSemaforoFilter) && (
+                <button
+                  onClick={() => { setPendSearch(""); setPendOrpaFilter(""); setPendSemaforoFilter(""); }}
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <X className="w-3 h-3" /> Limpiar
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="notificacion" className="w-full">
+            <Tabs defaultValue="notificacion" className="w-full" onValueChange={() => {
+              setPendSortField("dias_restantes");
+              setPendSortDir("asc");
+            }}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="notificacion" className="text-xs">
                   Notificación
@@ -1300,204 +1449,254 @@ export default function DashboardPage() {
               {/* Tab: Notificación Pendiente */}
               <TabsContent value="notificacion" className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium">Pendientes</p>
-                    <p className="text-2xl font-bold text-blue-700">{data.pendientes.notificacion.total}</p>
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Pendientes</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{data.pendientes.notificacion.total}</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                    <p className="text-xs text-red-600 font-medium">Vencidos (&gt;15 días hábiles)</p>
-                    <p className="text-2xl font-bold text-red-700">{data.pendientes.notificacion.vencidos}</p>
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <p className="text-xs text-red-600 dark:text-red-400 font-medium">Vencidos (&gt;15 días hábiles)</p>
+                    <p className="text-2xl font-bold text-red-700 dark:text-red-300">{data.pendientes.notificacion.vencidos}</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
-                    <p className="text-xs text-amber-600 font-medium">Por vencer esta semana</p>
-                    <p className="text-2xl font-bold text-amber-700">{data.pendientes.notificacion.porVencerEstaSemana}</p>
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Por vencer esta semana</p>
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{data.pendientes.notificacion.porVencerEstaSemana}</p>
                   </div>
                 </div>
-                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Expediente</TableHead>
-                        <TableHead>ORPA</TableHead>
-                        <TableHead>F. Resolución</TableHead>
-                        <TableHead>F. Límite</TableHead>
-                        <TableHead className="text-right">Días restantes</TableHead>
-                        <TableHead className="w-10">Estado</TableHead>
-                        <TableHead className="w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.pendientes.notificacion.items.slice(0, pendLimit.notificacion).map((item) => (
-                        <TableRow key={item.expediente_id}>
-                          <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
-                          <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
-                          <TableCell className="text-xs">{item.fecha_referencia}</TableCell>
-                          <TableCell className="text-xs">{item.fecha_limite}</TableCell>
-                          <TableCell className="text-right text-xs font-medium">
-                            {item.dias_restantes}
-                          </TableCell>
-                          <TableCell>
-                            <div className={`w-3 h-3 rounded-full ${
-                              item.semaforo === "rojo" ? "bg-red-500" :
-                              item.semaforo === "amarillo" ? "bg-amber-400" : "bg-emerald-500"
-                            }`} />
-                          </TableCell>
-                          <TableCell>
-                            <Link href={`/expedientes/${item.expediente_id}`}>
-                              <Eye className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {data.pendientes.notificacion.items.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
-                            No hay expedientes pendientes de notificación
-                          </TableCell>
-                        </TableRow>
+                {(() => {
+                  const filtered = filterAndSortItems(data.pendientes.notificacion.items);
+                  return (
+                    <>
+                      {(pendSearch || pendOrpaFilter || pendSemaforoFilter) && (
+                        <p className="text-xs text-muted-foreground">{filtered.length} de {data.pendientes.notificacion.items.length} expedientes</p>
                       )}
-                    </TableBody>
-                  </Table>
-                  {data.pendientes.notificacion.items.length > pendLimit.notificacion && (
-                    <button
-                      onClick={() => setPendLimit(p => ({ ...p, notificacion: p.notificacion + 50 }))}
-                      className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Cargar más ({data.pendientes.notificacion.items.length - pendLimit.notificacion} restantes)
-                    </button>
-                  )}
-                </div>
+                      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <SortableHead field="numero_expediente" label="Expediente" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="orpa_nombre" label="ORPA" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="materia" label="Materia" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="monto_multa" label="Monto" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} defaultDir="desc" align="right" />
+                              <SortableHead field="fecha_referencia" label="F. Resolución" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="fecha_limite" label="F. Límite" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="dias_restantes" label="Días rest." current={pendSortField} dir={pendSortDir} onSort={togglePendSort} align="right" />
+                              <TableHead className="w-10">Estado</TableHead>
+                              <TableHead className="w-10"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filtered.slice(0, pendLimit.notificacion).map((item) => (
+                              <TableRow key={item.expediente_id} className={item.vencido ? "bg-red-500/5" : ""}>
+                                <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
+                                <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
+                                <TableCell className="text-xs">{item.materia}</TableCell>
+                                <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
+                                <TableCell className="text-xs">{item.fecha_referencia}</TableCell>
+                                <TableCell className="text-xs">{item.fecha_limite}</TableCell>
+                                <TableCell className="text-right text-xs font-medium">
+                                  <span className={item.dias_restantes < 0 ? "text-red-600 dark:text-red-400" : item.dias_restantes <= 5 ? "text-amber-600 dark:text-amber-400" : ""}>
+                                    {item.dias_restantes}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className={`w-3 h-3 rounded-full ${
+                                    item.semaforo === "rojo" ? "bg-red-500" :
+                                    item.semaforo === "amarillo" ? "bg-amber-400" : "bg-emerald-500"
+                                  }`} />
+                                </TableCell>
+                                <TableCell>
+                                  <Link href={`/expedientes/${item.expediente_id}`}>
+                                    <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
+                                  </Link>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {filtered.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground text-sm">
+                                  {pendSearch || pendOrpaFilter || pendSemaforoFilter
+                                    ? "No hay resultados con los filtros aplicados"
+                                    : "No hay expedientes pendientes de notificación"}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                        {filtered.length > pendLimit.notificacion && (
+                          <button
+                            onClick={() => setPendLimit(p => ({ ...p, notificacion: p.notificacion + 50 }))}
+                            className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Cargar más ({filtered.length - pendLimit.notificacion} restantes)
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </TabsContent>
 
               {/* Tab: Cobro Pendiente */}
               <TabsContent value="cobro" className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium">Pendientes</p>
-                    <p className="text-2xl font-bold text-blue-700">{data.pendientes.cobro.total}</p>
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Pendientes</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{data.pendientes.cobro.total}</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                    <p className="text-xs text-red-600 font-medium">Vencidos (&gt;2 meses)</p>
-                    <p className="text-2xl font-bold text-red-700">{data.pendientes.cobro.vencidos}</p>
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <p className="text-xs text-red-600 dark:text-red-400 font-medium">Vencidos (&gt;2 meses)</p>
+                    <p className="text-2xl font-bold text-red-700 dark:text-red-300">{data.pendientes.cobro.vencidos}</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs text-emerald-600 font-medium">Monto total pendiente</p>
-                    <p className="text-2xl font-bold text-emerald-700">{formatMoney(data.pendientes.cobro.montoTotal)}</p>
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Monto total pendiente</p>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{formatMoney(data.pendientes.cobro.montoTotal)}</p>
                   </div>
                 </div>
-                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Expediente</TableHead>
-                        <TableHead>ORPA</TableHead>
-                        <TableHead>F. Notificación</TableHead>
-                        <TableHead>F. Límite</TableHead>
-                        <TableHead className="text-right">Monto</TableHead>
-                        <TableHead className="text-right">Días restantes</TableHead>
-                        <TableHead className="w-10">Estado</TableHead>
-                        <TableHead className="w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.pendientes.cobro.items.slice(0, pendLimit.cobro).map((item) => (
-                        <TableRow key={item.expediente_id}>
-                          <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
-                          <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
-                          <TableCell className="text-xs">{item.fecha_referencia}</TableCell>
-                          <TableCell className="text-xs">{item.fecha_limite}</TableCell>
-                          <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
-                          <TableCell className="text-right text-xs font-medium">
-                            {item.dias_restantes}
-                          </TableCell>
-                          <TableCell>
-                            <div className={`w-3 h-3 rounded-full ${
-                              item.semaforo === "rojo" ? "bg-red-500" :
-                              item.semaforo === "amarillo" ? "bg-amber-400" : "bg-emerald-500"
-                            }`} />
-                          </TableCell>
-                          <TableCell>
-                            <Link href={`/expedientes/${item.expediente_id}`}>
-                              <Eye className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {data.pendientes.cobro.items.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                            No hay expedientes pendientes de cobro
-                          </TableCell>
-                        </TableRow>
+                {(() => {
+                  const filtered = filterAndSortItems(data.pendientes.cobro.items);
+                  const montoFiltered = filtered.reduce((s, r) => s + r.monto_multa, 0);
+                  return (
+                    <>
+                      {(pendSearch || pendOrpaFilter || pendSemaforoFilter) && (
+                        <p className="text-xs text-muted-foreground">{filtered.length} de {data.pendientes.cobro.items.length} expedientes · {formatMoney(montoFiltered)}</p>
                       )}
-                    </TableBody>
-                  </Table>
-                  {data.pendientes.cobro.items.length > pendLimit.cobro && (
-                    <button
-                      onClick={() => setPendLimit(p => ({ ...p, cobro: p.cobro + 50 }))}
-                      className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Cargar más ({data.pendientes.cobro.items.length - pendLimit.cobro} restantes)
-                    </button>
-                  )}
-                </div>
+                      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <SortableHead field="numero_expediente" label="Expediente" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="orpa_nombre" label="ORPA" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="materia" label="Materia" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="fecha_referencia" label="F. Notificación" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="fecha_limite" label="F. Límite" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="monto_multa" label="Monto" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} defaultDir="desc" align="right" />
+                              <SortableHead field="dias_restantes" label="Días rest." current={pendSortField} dir={pendSortDir} onSort={togglePendSort} align="right" />
+                              <TableHead className="w-10">Estado</TableHead>
+                              <TableHead className="w-10"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filtered.slice(0, pendLimit.cobro).map((item) => (
+                              <TableRow key={item.expediente_id} className={item.vencido ? "bg-red-500/5" : ""}>
+                                <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
+                                <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
+                                <TableCell className="text-xs">{item.materia}</TableCell>
+                                <TableCell className="text-xs">{item.fecha_referencia}</TableCell>
+                                <TableCell className="text-xs">{item.fecha_limite}</TableCell>
+                                <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
+                                <TableCell className="text-right text-xs font-medium">
+                                  <span className={item.dias_restantes < 0 ? "text-red-600 dark:text-red-400" : item.dias_restantes <= 30 ? "text-amber-600 dark:text-amber-400" : ""}>
+                                    {item.dias_restantes}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className={`w-3 h-3 rounded-full ${
+                                    item.semaforo === "rojo" ? "bg-red-500" :
+                                    item.semaforo === "amarillo" ? "bg-amber-400" : "bg-emerald-500"
+                                  }`} />
+                                </TableCell>
+                                <TableCell>
+                                  <Link href={`/expedientes/${item.expediente_id}`}>
+                                    <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
+                                  </Link>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {filtered.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground text-sm">
+                                  {pendSearch || pendOrpaFilter || pendSemaforoFilter
+                                    ? "No hay resultados con los filtros aplicados"
+                                    : "No hay expedientes pendientes de cobro"}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                        {filtered.length > pendLimit.cobro && (
+                          <button
+                            onClick={() => setPendLimit(p => ({ ...p, cobro: p.cobro + 50 }))}
+                            className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Cargar más ({filtered.length - pendLimit.cobro} restantes)
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </TabsContent>
 
               {/* Tab: Pago Pendiente */}
               <TabsContent value="pago" className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium">Sin pagar</p>
-                    <p className="text-2xl font-bold text-blue-700">{data.pendientes.pago.total}</p>
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Sin pagar</p>
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{data.pendientes.pago.total}</p>
                   </div>
-                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs text-emerald-600 font-medium">Monto total adeudado</p>
-                    <p className="text-2xl font-bold text-emerald-700">{formatMoney(data.pendientes.pago.montoTotal)}</p>
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Monto total adeudado</p>
+                    <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{formatMoney(data.pendientes.pago.montoTotal)}</p>
                   </div>
                 </div>
-                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Expediente</TableHead>
-                        <TableHead>ORPA</TableHead>
-                        <TableHead>F. Resolución</TableHead>
-                        <TableHead className="text-right">Monto</TableHead>
-                        <TableHead className="w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.pendientes.pago.items.slice(0, pendLimit.pago).map((item) => (
-                        <TableRow key={item.expediente_id}>
-                          <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
-                          <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
-                          <TableCell className="text-xs">{item.fecha_referencia || "—"}</TableCell>
-                          <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
-                          <TableCell>
-                            <Link href={`/expedientes/${item.expediente_id}`}>
-                              <Eye className="w-3.5 h-3.5 text-gray-400 hover:text-gray-700 cursor-pointer" />
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {data.pendientes.pago.items.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
-                            No hay expedientes pendientes de pago
-                          </TableCell>
-                        </TableRow>
+                {(() => {
+                  const filtered = filterAndSortItems(data.pendientes.pago.items);
+                  const montoFiltered = filtered.reduce((s, r) => s + r.monto_multa, 0);
+                  return (
+                    <>
+                      {(pendSearch || pendOrpaFilter || pendSemaforoFilter) && (
+                        <p className="text-xs text-muted-foreground">{filtered.length} de {data.pendientes.pago.items.length} expedientes · {formatMoney(montoFiltered)}</p>
                       )}
-                    </TableBody>
-                  </Table>
-                  {data.pendientes.pago.items.length > pendLimit.pago && (
-                    <button
-                      onClick={() => setPendLimit(p => ({ ...p, pago: p.pago + 50 }))}
-                      className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Cargar más ({data.pendientes.pago.items.length - pendLimit.pago} restantes)
-                    </button>
-                  )}
-                </div>
+                      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <SortableHead field="numero_expediente" label="Expediente" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="orpa_nombre" label="ORPA" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="materia" label="Materia" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="fecha_referencia" label="F. Resolución" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
+                              <SortableHead field="monto_multa" label="Monto" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} defaultDir="desc" align="right" />
+                              <TableHead className="w-10"></TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filtered.slice(0, pendLimit.pago).map((item) => (
+                              <TableRow key={item.expediente_id}>
+                                <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
+                                <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
+                                <TableCell className="text-xs">{item.materia}</TableCell>
+                                <TableCell className="text-xs">{item.fecha_referencia || "—"}</TableCell>
+                                <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
+                                <TableCell>
+                                  <Link href={`/expedientes/${item.expediente_id}`}>
+                                    <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
+                                  </Link>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {filtered.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                                  {pendSearch || pendOrpaFilter || pendSemaforoFilter
+                                    ? "No hay resultados con los filtros aplicados"
+                                    : "No hay expedientes pendientes de pago"}
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                        {filtered.length > pendLimit.pago && (
+                          <button
+                            onClick={() => setPendLimit(p => ({ ...p, pago: p.pago + 50 }))}
+                            className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 dark:hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Cargar más ({filtered.length - pendLimit.pago} restantes)
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </TabsContent>
             </Tabs>
           </CardContent>

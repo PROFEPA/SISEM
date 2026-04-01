@@ -237,6 +237,7 @@ export async function GET() {
       numero_expediente: string;
       orpa_nombre: string;
       orpa_id: string;
+      materia: string;
       monto_multa: number;
       fecha_referencia: string;
       fecha_limite: string;
@@ -266,6 +267,7 @@ export async function GET() {
             numero_expediente: exp.numero_expediente,
             orpa_nombre: orpa?.nombre || "Sin ORPA",
             orpa_id: exp.orpa_id,
+            materia: exp.materia || "—",
             monto_multa: monto,
             fecha_referencia: exp.fecha_resolucion,
             fecha_limite: limite,
@@ -287,6 +289,7 @@ export async function GET() {
             numero_expediente: exp.numero_expediente,
             orpa_nombre: orpa?.nombre || "Sin ORPA",
             orpa_id: exp.orpa_id,
+            materia: exp.materia || "—",
             monto_multa: monto,
             fecha_referencia: exp.fecha_notificacion,
             fecha_limite: limite,
@@ -303,6 +306,7 @@ export async function GET() {
             numero_expediente: exp.numero_expediente,
             orpa_nombre: orpa?.nombre || "Sin ORPA",
             orpa_id: exp.orpa_id,
+            materia: exp.materia || "—",
             monto_multa: monto,
             fecha_referencia: exp.fecha_resolucion || "",
             fecha_limite: "",
