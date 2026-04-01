@@ -57,11 +57,17 @@ export default function PermisosPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/admin/permisos");
-      if (!res.ok) throw new Error("Error al cargar permisos");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error al cargar permisos");
+      }
       const data = await res.json();
-      setPermisos(data);
-    } catch {
-      toast.error("Error al cargar permisos");
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.error("Tabla permisos_rol vacía. Ejecuta la migración 20260402000000_role_permissions.sql en Supabase SQL Editor.");
+      }
+      setPermisos(data || []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error al cargar permisos");
     } finally {
       setLoading(false);
     }
@@ -159,6 +165,19 @@ export default function PermisosPage() {
       </p>
 
       <div className="grid gap-6">
+        {permisos.length === 0 && (
+          <Card>
+            <CardContent className="pt-6 text-center space-y-3">
+              <Shield className="h-10 w-10 text-muted-foreground mx-auto" />
+              <p className="text-muted-foreground text-sm">
+                No se encontraron permisos. Ejecuta la migración <code className="bg-muted px-1.5 py-0.5 rounded text-xs">20260402000000_role_permissions.sql</code> en el SQL Editor de Supabase.
+              </p>
+              <Button variant="outline" size="sm" onClick={loadPermisos}>
+                Reintentar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         {permisos.map((rolPermisos) => (
           <Card key={rolPermisos.role}>
             <CardContent className="pt-6">
