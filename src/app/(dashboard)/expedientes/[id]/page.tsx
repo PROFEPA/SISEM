@@ -24,6 +24,7 @@ import {
   Shield,
   CheckCircle2,
   XCircle,
+  Download,
 } from "lucide-react";
 import type { IExpediente, IExpedienteHistorial } from "@/types";
 
@@ -109,12 +110,20 @@ export default function ExpedienteDetallePage() {
             {expediente.orpa?.nombre} — {expediente.materia || "Sin materia"}
           </p>
         </div>
-        <Link href={`/expedientes/${id}/editar`}>
-          <Button size="sm">
-            <Pencil className="w-4 h-4 mr-2" />
-            Editar
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <a href={`/api/expedientes/${id}/pdf`} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              PDF
+            </Button>
+          </a>
+          <Link href={`/expedientes/${id}/editar`}>
+            <Button size="sm">
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Status badges */}

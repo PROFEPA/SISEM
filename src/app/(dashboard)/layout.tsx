@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   Home,
   PenLine,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationBell } from "@/components/ui/notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 const NAV_ITEMS = [
@@ -46,6 +48,7 @@ const NAV_ITEMS = [
   { href: "/importar", label: "Importar Excel", icon: Upload, roles: ["admin", "capturador"] },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users, roles: ["admin"] },
   { href: "/admin/orpas", label: "ORPAs", icon: Building2, roles: ["admin"] },
+  { href: "/admin/permisos", label: "Permisos", icon: Shield, roles: ["admin"] },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -62,6 +65,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   admin: "Administración",
   usuarios: "Usuarios",
   orpas: "ORPAs",
+  permisos: "Permisos",
   editar: "Editar",
 };
 
@@ -287,6 +291,7 @@ export default function DashboardLayout({
           <div className="hidden lg:flex items-center gap-3">
             {profile && (
               <div className="flex items-center gap-2.5">
+                <ThemeToggle />
                 <NotificationBell
                   orpaId={profile.role === "admin" ? undefined : profile.orpa_id || undefined}
                 />

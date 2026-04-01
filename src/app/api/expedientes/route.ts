@@ -1,6 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { expedienteCreateSchema } from "@/lib/validations/expediente";
+import { checkPermission } from "@/lib/auth/permissions";
 
 function escapeIlike(str: string): string {
   return str.replace(/[%_\\]/g, (c) => `\\${c}`);
@@ -65,10 +66,25 @@ export async function GET(request: NextRequest) {
   if (fechaNotifDesde) query = query.gte("fecha_notificacion", fechaNotifDesde);
   if (fechaNotifHasta) query = query.lte("fecha_notificacion", fechaNotifHasta);
   if (busqueda) {
-    const escaped = escapeIlike(busqueda);
-    query = query.or(
-      `numero_expediente.ilike.%${escaped}%,nombre_infractor.ilike.%${escaped}%,razon_social.ilike.%${escaped}%`
-    );
+    // Use full-text search for queries >= 3 chars, ilike fallback for short queries
+    if (busqueda.length >= 3) {
+      // Convert search terms for tsquery: split, trim, join with &
+      const terms = busqueda
+        .trim()
+        .split(/\s+/)
+        .filter((t) => t.length > 0)
+        .map((t) => t.replace(/[^a-záéíóúñü0-9/.-]/gi, ""))
+        .filter((t) => t.length > 0);
+      if (terms.length > 0) {
+        const tsquery = terms.map((t) => `${t}:*`).join(" & ");
+        query = query.textSearch("search_vector", tsquery, { type: "plain", config: "spanish" });
+      }
+    } else {
+      const escaped = escapeIlike(busqueda);
+      query = query.or(
+        `numero_expediente.ilike.%${escaped}%,nombre_infractor.ilike.%${escaped}%,razon_social.ilike.%${escaped}%`
+      );
+    }
   }
 
   const from = (page - 1) * pageSize;
@@ -99,16 +115,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const perm = await checkPermission("puede_crear_expediente");
+  if (!perm.allowed) {
     return NextResponse.json(
-      { data: null, error: "No autorizado", message: null },
-      { status: 401 }
+      { data: null, error: perm.error || "Sin permisos", message: null },
+      { status: perm.user ? 403 : 401 }
     );
   }
+  const user = perm.user!;
 
   const body = await request.json();
 

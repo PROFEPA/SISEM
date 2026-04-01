@@ -41,6 +41,9 @@ import {
   Cell,
   AreaChart,
   Area,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts";
 
 // ============================================================
@@ -74,6 +77,25 @@ interface DashboardData {
     montoPendientes: number;
   }>;
   porMateria: Array<{ materia: string; count: number }>;
+  trends?: Array<{
+    month: string;
+    impuestas: number;
+    montoImpuesto: number;
+    cobradas: number;
+    montoCobrado: number;
+    impugnadas: number;
+    tasaCobro: number;
+    tasaImpugnacion: number;
+  }>;
+  orpaRanking?: Array<{
+    nombre: string;
+    clave: string;
+    total: number;
+    pagados: number;
+    cobPct: number;
+    pendientes: number;
+    pendPct: number;
+  }>;
   pendientes?: {
     notificacion: {
       items: PendienteRow[];
@@ -321,6 +343,7 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [sortKey, setSortKey] = useState<OrpaSortKey>("monto");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [pendLimit, setPendLimit] = useState({ notificacion: 30, cobro: 30, pago: 30 });
 
   async function fetchData() {
     try {
@@ -340,6 +363,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshing(true);
+      fetchData();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   function handleRefresh() {
@@ -772,6 +804,135 @@ export default function DashboardPage() {
         </ChartCard>
       </div>
 
+      {/* Charts row 3: Trends + ORPA Ranking */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Line chart: impuestas vs cobradas mensualmente */}
+        <ChartCard
+          title="Multas impuestas vs cobradas"
+          subtitle="Comparativa mensual de resoluciones y pagos"
+          loading={loading}
+        >
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={data?.trends || []}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={formatMonth}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#9CA3AF" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <RechartsTooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  return (
+                    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm">
+                      <p className="font-semibold text-gray-900 mb-2">{formatMonthFull(String(label ?? ""))}</p>
+                      {payload.map((entry) => (
+                        <p key={String(entry.name)} className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: String(entry.color) }} />
+                          <span className="text-gray-600">{String(entry.name)}:</span>
+                          <span className="font-semibold">{Number(entry.value).toLocaleString("es-MX")}</span>
+                        </p>
+                      ))}
+                    </div>
+                  );
+                }}
+              />
+              <Legend
+                verticalAlign="bottom"
+                height={36}
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 12 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="impuestas"
+                name="Impuestas"
+                stroke="#6366F1"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="cobradas"
+                name="Cobradas"
+                stroke="#10B981"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="impugnadas"
+                name="Impugnadas"
+                stroke="#EF4444"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={{ r: 3 }}
+                activeDot={{ r: 5, stroke: "#fff", strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        {/* ORPA Ranking: % cobrado */}
+        <ChartCard
+          title="Ranking de cumplimiento por ORPA"
+          subtitle="% de expedientes cobrados (mín. 3 expedientes)"
+          loading={loading}
+        >
+          <div className="space-y-2.5 py-1 max-h-[300px] overflow-y-auto">
+            {(data?.orpaRanking || []).map((orpa, i) => {
+              const isTop = i < 3;
+              const isBottom = i >= (data?.orpaRanking?.length || 0) - 3;
+              return (
+                <div key={orpa.clave} className="group">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold w-5 text-center ${isTop ? "text-emerald-600" : isBottom ? "text-red-500" : "text-gray-400"}`}>
+                        {i + 1}
+                      </span>
+                      <span className="text-sm font-medium text-gray-700 truncate max-w-[180px]" title={orpa.nombre}>
+                        {orpa.nombre}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{orpa.pagados}/{orpa.total}</span>
+                      <span className={`text-sm font-bold tabular-nums ${
+                        orpa.cobPct >= 50 ? "text-emerald-600" :
+                        orpa.cobPct >= 20 ? "text-amber-600" : "text-red-500"
+                      }`}>
+                        {orpa.cobPct.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden ml-7">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        orpa.cobPct >= 50 ? "bg-emerald-500" :
+                        orpa.cobPct >= 20 ? "bg-amber-400" : "bg-red-400"
+                      }`}
+                      style={{ width: `${Math.min(orpa.cobPct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {(!data?.orpaRanking || data.orpaRanking.length === 0) && (
+              <p className="text-sm text-gray-400 text-center py-8">Sin datos suficientes para ranking</p>
+            )}
+          </div>
+        </ChartCard>
+      </div>
+
       {/* ORPA summary table */}
       <Card className="border border-gray-200/60 shadow-sm hover:shadow-md transition-shadow duration-300">
         <CardHeader className="pb-2">
@@ -1166,7 +1327,7 @@ export default function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.pendientes.notificacion.items.slice(0, 50).map((item) => (
+                      {data.pendientes.notificacion.items.slice(0, pendLimit.notificacion).map((item) => (
                         <TableRow key={item.expediente_id}>
                           <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
                           <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
@@ -1197,6 +1358,14 @@ export default function DashboardPage() {
                       )}
                     </TableBody>
                   </Table>
+                  {data.pendientes.notificacion.items.length > pendLimit.notificacion && (
+                    <button
+                      onClick={() => setPendLimit(p => ({ ...p, notificacion: p.notificacion + 50 }))}
+                      className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Cargar más ({data.pendientes.notificacion.items.length - pendLimit.notificacion} restantes)
+                    </button>
+                  )}
                 </div>
               </TabsContent>
 
@@ -1231,7 +1400,7 @@ export default function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.pendientes.cobro.items.slice(0, 50).map((item) => (
+                      {data.pendientes.cobro.items.slice(0, pendLimit.cobro).map((item) => (
                         <TableRow key={item.expediente_id}>
                           <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
                           <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
@@ -1263,6 +1432,14 @@ export default function DashboardPage() {
                       )}
                     </TableBody>
                   </Table>
+                  {data.pendientes.cobro.items.length > pendLimit.cobro && (
+                    <button
+                      onClick={() => setPendLimit(p => ({ ...p, cobro: p.cobro + 50 }))}
+                      className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Cargar más ({data.pendientes.cobro.items.length - pendLimit.cobro} restantes)
+                    </button>
+                  )}
                 </div>
               </TabsContent>
 
@@ -1290,7 +1467,7 @@ export default function DashboardPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {data.pendientes.pago.items.slice(0, 50).map((item) => (
+                      {data.pendientes.pago.items.slice(0, pendLimit.pago).map((item) => (
                         <TableRow key={item.expediente_id}>
                           <TableCell className="font-mono text-xs">{item.numero_expediente}</TableCell>
                           <TableCell className="text-xs">{item.orpa_nombre}</TableCell>
@@ -1312,6 +1489,14 @@ export default function DashboardPage() {
                       )}
                     </TableBody>
                   </Table>
+                  {data.pendientes.pago.items.length > pendLimit.pago && (
+                    <button
+                      onClick={() => setPendLimit(p => ({ ...p, pago: p.pago + 50 }))}
+                      className="w-full mt-2 py-2 text-xs text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Cargar más ({data.pendientes.pago.items.length - pendLimit.pago} restantes)
+                    </button>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

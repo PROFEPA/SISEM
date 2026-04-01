@@ -60,7 +60,7 @@ export default function ExpedientesPage() {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(25);
   const [showFilters, setShowFilters] = useState(false);
 
   // Filters
@@ -477,31 +477,49 @@ export default function ExpedientesPage() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t">
-              <p className="text-xs text-muted-foreground">
-                Página {page} de {totalPages} ({total.toLocaleString("es-MX")} registros)
-              </p>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+          {total > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Mostrando {((page - 1) * pageSize + 1).toLocaleString("es-MX")}–{Math.min(page * pageSize, total).toLocaleString("es-MX")} de {total.toLocaleString("es-MX")}
+                </p>
+                <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="h-7 w-[70px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground px-2">
+                    {page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

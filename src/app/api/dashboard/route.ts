@@ -46,6 +46,9 @@ export async function GET() {
       tipo_impugnacion: string | null;
       fecha_resolucion: string | null;
       fecha_notificacion: string | null;
+      fecha_pago: string | null;
+      monto_pagado: unknown;
+      fecha_impugnacion: string | null;
       materia: string | null;
       enviada_a_cobro: boolean;
       orpa: { nombre: string; clave: string } | null;
@@ -59,7 +62,7 @@ export async function GET() {
       const to = from + PAGE_SIZE - 1;
       const { data: batch, error: batchError } = await supabase
         .from("expedientes")
-        .select("id, numero_expediente, orpa_id, monto_multa, pagado, impugnado, tipo_impugnacion, fecha_resolucion, fecha_notificacion, materia, enviada_a_cobro, orpa:orpas(nombre, clave)")
+        .select("id, numero_expediente, orpa_id, monto_multa, pagado, impugnado, tipo_impugnacion, fecha_resolucion, fecha_notificacion, fecha_pago, monto_pagado, fecha_impugnacion, materia, enviada_a_cobro, orpa:orpas(nombre, clave)")
         .range(from, to);
 
       if (batchError) {
@@ -86,6 +89,8 @@ export async function GET() {
     const orpaStats = new Map<string, { nombre: string; clave: string; total: number; monto: number; pagados: number; montoPagados: number; impugnados: number; montoImpugnados: number; enviadosCobro: number; montoEnviadosCobro: number; pendientes: number; montoPendientes: number }>();
     const materiaDist = new Map<string, number>();
     const monthlyMap = new Map<string, { count: number; monto: number }>();
+    // v3: monthly breakdown for trends
+    const monthlyBreakdown = new Map<string, { impuestas: number; montoImpuesto: number; cobradas: number; montoCobrado: number; impugnadas: number }>();
 
     // Status distribution — use *priority* classification (mutually exclusive)
     // Priority: pagado > impugnado > enviado a cobro > pendiente
@@ -152,6 +157,38 @@ export async function GET() {
             const m = monthlyMap.get(month)!;
             m.count += 1;
             m.monto += monto;
+
+            // v3: monthly breakdown — impuestas
+            if (!monthlyBreakdown.has(month)) {
+              monthlyBreakdown.set(month, { impuestas: 0, montoImpuesto: 0, cobradas: 0, montoCobrado: 0, impugnadas: 0 });
+            }
+            const mb = monthlyBreakdown.get(month)!;
+            mb.impuestas += 1;
+            mb.montoImpuesto += monto;
+          }
+        }
+
+        // v3: monthly breakdown — cobradas (by fecha_pago month)
+        if (exp.pagado && exp.fecha_pago) {
+          const payMonth = exp.fecha_pago.substring(0, 7);
+          if (payMonth >= MIN_DATE.substring(0, 7)) {
+            if (!monthlyBreakdown.has(payMonth)) {
+              monthlyBreakdown.set(payMonth, { impuestas: 0, montoImpuesto: 0, cobradas: 0, montoCobrado: 0, impugnadas: 0 });
+            }
+            const mb = monthlyBreakdown.get(payMonth)!;
+            mb.cobradas += 1;
+            mb.montoCobrado += Number(exp.monto_pagado) || monto;
+          }
+        }
+
+        // v3: monthly breakdown — impugnadas (by fecha_impugnacion month or fecha_resolucion)
+        if (exp.impugnado) {
+          const impMonth = (exp.fecha_impugnacion || exp.fecha_resolucion || "").substring(0, 7);
+          if (impMonth && impMonth >= MIN_DATE.substring(0, 7)) {
+            if (!monthlyBreakdown.has(impMonth)) {
+              monthlyBreakdown.set(impMonth, { impuestas: 0, montoImpuesto: 0, cobradas: 0, montoCobrado: 0, impugnadas: 0 });
+            }
+            monthlyBreakdown.get(impMonth)!.impugnadas += 1;
           }
         }
       }
@@ -161,8 +198,32 @@ export async function GET() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, data]) => ({ month, ...data }));
 
+    // v3: monthly breakdown sorted
+    const trends = Array.from(monthlyBreakdown.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, d]) => ({
+        month,
+        ...d,
+        tasaCobro: d.impuestas > 0 ? (d.cobradas / d.impuestas) * 100 : 0,
+        tasaImpugnacion: d.impuestas > 0 ? (d.impugnadas / d.impuestas) * 100 : 0,
+      }));
+
     const orpaArray = Array.from(orpaStats.values())
       .sort((a, b) => b.monto - a.monto);
+
+    // v3: ORPA ranking by collection %
+    const orpaRanking = Array.from(orpaStats.values())
+      .filter((o) => o.total >= 3) // minimum 3 expedientes for ranking
+      .map((o) => ({
+        nombre: o.nombre,
+        clave: o.clave,
+        total: o.total,
+        pagados: o.pagados,
+        cobPct: o.total > 0 ? (o.pagados / o.total) * 100 : 0,
+        pendientes: o.pendientes,
+        pendPct: o.total > 0 ? (o.pendientes / o.total) * 100 : 0,
+      }))
+      .sort((a, b) => b.cobPct - a.cobPct);
 
     const materiaArray = Array.from(materiaDist.entries())
       .sort(([, a], [, b]) => b - a)
@@ -267,6 +328,8 @@ export async function GET() {
         monthlyTrend,
         porOrpa: orpaArray,
         porMateria: materiaArray,
+        trends,
+        orpaRanking,
         pendientes: {
           notificacion: {
             items: pendientesNotificacion,

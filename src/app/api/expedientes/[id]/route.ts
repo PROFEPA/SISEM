@@ -1,6 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { expedienteUpdateSchema } from "@/lib/validations/expediente";
+import { checkPermission } from "@/lib/auth/permissions";
 
 export async function GET(
   _request: NextRequest,
@@ -51,16 +52,14 @@ export async function PUT(
   const { id } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const perm = await checkPermission("puede_editar_expediente");
+  if (!perm.allowed) {
     return NextResponse.json(
-      { data: null, error: "No autorizado", message: null },
-      { status: 401 }
+      { data: null, error: perm.error || "Sin permisos", message: null },
+      { status: perm.user ? 403 : 401 }
     );
   }
+  const user = perm.user!;
 
   // Get current values for audit
   const { data: current } = await supabase
@@ -136,28 +135,11 @@ export async function DELETE(
   const { id } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const perm = await checkPermission("puede_eliminar_expediente");
+  if (!perm.allowed) {
     return NextResponse.json(
-      { data: null, error: "No autorizado", message: null },
-      { status: 401 }
-    );
-  }
-
-  // Check admin role
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") {
-    return NextResponse.json(
-      { data: null, error: "Solo administradores pueden eliminar expedientes", message: null },
-      { status: 403 }
+      { data: null, error: perm.error || "Sin permisos para eliminar", message: null },
+      { status: perm.user ? 403 : 401 }
     );
   }
 

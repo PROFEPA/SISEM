@@ -1,34 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseExcelBuffer } from "@/lib/excel/parser";
 import { NextRequest, NextResponse } from "next/server";
+import { checkPermission } from "@/lib/auth/permissions";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const perm = await checkPermission("puede_importar");
+  if (!perm.allowed) {
     return NextResponse.json(
-      { data: null, error: "No autorizado", message: null },
-      { status: 401 }
+      { data: null, error: perm.error || "Sin permisos para importar", message: null },
+      { status: perm.user ? 403 : 401 }
     );
   }
-
-  // Check role
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["admin", "capturador"].includes(profile.role)) {
-    return NextResponse.json(
-      { data: null, error: "Sin permisos para importar", message: null },
-      { status: 403 }
-    );
-  }
+  const user = perm.user!;
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
