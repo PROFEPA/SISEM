@@ -42,10 +42,21 @@ export async function GET() {
       return NextResponse.json({ data: null, error: error.message }, { status: 500 });
     }
 
-    // Get expediente counts per ORPA
-    const { data: expedientes } = await supabase
-      .from("expedientes")
-      .select("orpa_id, monto_multa, pagado, impugnado");
+    // Get ALL expediente counts per ORPA (paginate past Supabase 1000-row default)
+    let allExpedientes: { orpa_id: string; monto_multa: number | null; pagado: boolean; impugnado: boolean }[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    while (true) {
+      const { data: batch } = await supabase
+        .from("expedientes")
+        .select("orpa_id, monto_multa, pagado, impugnado")
+        .range(from, from + batchSize - 1);
+      if (!batch || batch.length === 0) break;
+      allExpedientes = allExpedientes.concat(batch);
+      if (batch.length < batchSize) break;
+      from += batchSize;
+    }
+    const expedientes = allExpedientes;
 
     const stats = new Map<string, { total: number; monto: number; pagados: number; impugnados: number }>();
     if (expedientes) {

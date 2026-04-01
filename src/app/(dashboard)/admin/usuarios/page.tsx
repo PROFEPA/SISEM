@@ -44,7 +44,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-emerald-600 text-white hover:bg-emerald-600",
   capturador: "bg-blue-500 text-white hover:bg-blue-500",
-  visualizador: "bg-gray-200 text-gray-700 hover:bg-gray-200",
+  visualizador: "bg-muted text-muted-foreground hover:bg-muted",
 };
 
 export default function UsuariosPage() {
@@ -374,16 +374,16 @@ export default function UsuariosPage() {
       {!loading && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: "Total", value: stats.total, color: "text-gray-900" },
+            { label: "Total", value: stats.total, color: "text-foreground" },
             { label: "Admins", value: stats.admins, color: "text-emerald-600" },
             { label: "Capturadores", value: stats.capturadores, color: "text-blue-600" },
-            { label: "Visualizadores", value: stats.visualizadores, color: "text-gray-500" },
+            { label: "Visualizadores", value: stats.visualizadores, color: "text-muted-foreground" },
             { label: "Activos", value: stats.activos, color: "text-emerald-600" },
           ].map((s) => (
-            <Card key={s.label} className="border border-gray-200/60">
+            <Card key={s.label} className="border border-border/60">
               <CardContent className="p-4 text-center">
                 <p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
               </CardContent>
             </Card>
           ))}
@@ -392,7 +392,7 @@ export default function UsuariosPage() {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por nombre, ORPA o rol..."
           value={search}
@@ -402,7 +402,7 @@ export default function UsuariosPage() {
       </div>
 
       {/* Table */}
-      <Card className="border border-gray-200/60">
+      <Card className="border border-border/60">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -460,8 +460,8 @@ export default function UsuariosPage() {
                         <Badge
                           className={
                             p.activo
-                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
-                              : "bg-gray-100 text-gray-500 hover:bg-gray-100"
+                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-900 dark:text-emerald-300"
+                              : "bg-muted text-muted-foreground hover:bg-muted"
                           }
                         >
                           {p.activo ? "Activo" : "Inactivo"}

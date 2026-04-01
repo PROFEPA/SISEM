@@ -247,7 +247,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen flex bg-[#F8F9FB]">
+    <div className="min-h-screen flex bg-background">
       {/* Desktop sidebar */}
       {/* Desktop sidebar */}
       <aside className={`hidden lg:flex ${collapsed ? 'w-16' : 'w-64'} flex-col fixed top-0 left-0 h-screen bg-[#0F1923] z-40 transition-all duration-300`}>
@@ -257,7 +257,7 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className={`flex-1 flex flex-col min-h-screen ${collapsed ? 'lg:ml-16' : 'lg:ml-64'} transition-all duration-300`}>
         {/* Header */}
-        <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 lg:px-8 h-14 flex items-center justify-between">
+        <header className="sticky top-0 z-20 bg-card border-b border-border px-4 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Mobile menu */}
             <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>

@@ -363,7 +363,7 @@ export default function OrpasPage() {
                       <TableCell className="text-muted-foreground text-sm">{orpa.estado}</TableCell>
                       <TableCell className="text-center">
                         <Badge
-                          className={`cursor-pointer ${orpa.activa ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                          className={`cursor-pointer ${orpa.activa ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900 dark:text-emerald-300" : "bg-muted text-muted-foreground hover:bg-muted"}`}
                           onClick={() => toggleActive(orpa)}
                         >
                           {orpa.activa ? "Sí" : "No"}
@@ -373,7 +373,7 @@ export default function OrpasPage() {
                       <TableCell className="text-right tabular-nums text-sm">{formatMoney(orpa.stats.monto)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
                             <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(cobPct, 100)}%` }} />
                           </div>
                           <span className="text-xs tabular-nums w-8 text-right">{cobPct.toFixed(0)}%</span>

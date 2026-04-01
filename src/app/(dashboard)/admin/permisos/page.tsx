@@ -44,7 +44,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-emerald-600 text-white hover:bg-emerald-600",
   capturador: "bg-blue-500 text-white hover:bg-blue-500",
-  visualizador: "bg-gray-200 text-gray-700 hover:bg-gray-200",
+  visualizador: "bg-muted text-muted-foreground hover:bg-muted",
 };
 
 export default function PermisosPage() {

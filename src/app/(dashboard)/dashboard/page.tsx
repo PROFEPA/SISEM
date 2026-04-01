@@ -223,7 +223,7 @@ function useAnimatedNumber(target: number, duration = 1200): number {
 
 function KPISkeleton() {
   return (
-    <Card className="border border-gray-200/60">
+    <Card className="border border-border/60">
       <CardContent className="p-5">
         <div className="flex items-start justify-between mb-4">
           <Skeleton className="h-4 w-28" />
@@ -272,7 +272,7 @@ function AnimatedKPI({
 
   return (
     <Card
-      className={`group relative overflow-hidden border border-gray-200/60 shadow-sm
+      className={`group relative overflow-hidden border border-border/60 shadow-sm
         hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ease-out
         ${visible ? "animate-fadeInUp" : "opacity-0"}`}
     >
@@ -281,7 +281,7 @@ function AnimatedKPI({
       />
       <CardContent className="relative p-5">
         <div className="flex items-start justify-between mb-3">
-          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
           <div
             className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center
               group-hover:scale-110 transition-transform duration-300`}
@@ -289,10 +289,10 @@ function AnimatedKPI({
             <Icon className={`w-5 h-5 ${iconColor}`} />
           </div>
         </div>
-        <p className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight tabular-nums">
+        <p className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight tabular-nums">
           {displayValue}
         </p>
-        <p className="text-xs text-gray-400 mt-1.5">{subtitle}</p>
+        <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>
       </CardContent>
     </Card>
   );
@@ -313,13 +313,13 @@ function ChartCard({
 }) {
   return (
     <Card
-      className={`border border-gray-200/60 shadow-sm hover:shadow-md transition-shadow duration-300 ${className}`}
+      className={`border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300 ${className}`}
     >
       <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold text-gray-900">
+        <CardTitle className="text-base font-semibold text-foreground">
           {title}
         </CardTitle>
-        <p className="text-xs text-gray-400">{subtitle}</p>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -421,7 +421,7 @@ export default function DashboardPage() {
   }) : [];
 
   function SortIcon({ column }: { column: OrpaSortKey }) {
-    if (sortKey !== column) return <ArrowUpDown className="w-3 h-3 text-gray-300" />;
+    if (sortKey !== column) return <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />;
     return sortDir === "asc"
       ? <ChevronUp className="w-3 h-3 text-emerald-600" />
       : <ChevronDown className="w-3 h-3 text-emerald-600" />;
@@ -432,10 +432,10 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Dashboard
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">
+          <p className="text-muted-foreground text-sm mt-0.5">
             Panorama general de expedientes de multas — PROFEPA
           </p>
         </div>
@@ -443,7 +443,7 @@ export default function DashboardPage() {
           onClick={handleRefresh}
           disabled={refreshing || loading}
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium
-            text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+            text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw
             className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
@@ -563,15 +563,15 @@ export default function DashboardPage() {
                   if (!active || !payload?.length) return null;
                   const orpa = data?.porOrpa.find((o) => o.clave === label);
                   return (
-                    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm">
-                      <p className="font-semibold text-gray-900">
+                    <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-lg px-4 py-3 text-sm">
+                      <p className="font-semibold text-foreground">
                         {orpa?.nombre || label}
                       </p>
-                      <p className="text-xs text-gray-400 mb-2">{label}</p>
+                      <p className="text-xs text-muted-foreground mb-2">{label}</p>
                       <p className="text-emerald-600 font-bold">
                         {formatMoney(Number(payload[0].value))}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {orpa?.total} expedientes
                       </p>
                     </div>
@@ -626,15 +626,15 @@ export default function DashboardPage() {
                         ? ((Number(d.value) / totalStatus) * 100).toFixed(1)
                         : "0";
                     return (
-                      <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm">
-                        <p className="font-semibold text-gray-900">{d.name}</p>
+                      <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-lg px-4 py-3 text-sm">
+                        <p className="font-semibold text-foreground">{d.name}</p>
                         <p
                           className="text-lg font-bold"
                           style={{ color: String(d.payload?.fill) }}
                         >
                           {Number(d.value).toLocaleString("es-MX")}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-muted-foreground">
                           {pct}% del total
                         </p>
                       </div>
@@ -660,18 +660,18 @@ export default function DashboardPage() {
                               PIE_COLORS[index % PIE_COLORS.length],
                           }}
                         />
-                        <span className="text-gray-600">{entry.name}</span>
+                        <span className="text-muted-foreground">{entry.name}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {pct.toFixed(1)}%
                         </span>
-                        <span className="font-semibold text-gray-900 tabular-nums w-14 text-right">
+                        <span className="font-semibold text-foreground tabular-nums w-14 text-right">
                           {entry.value.toLocaleString("es-MX")}
                         </span>
                       </div>
                     </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-1000 ease-out"
                         style={{
@@ -726,8 +726,8 @@ export default function DashboardPage() {
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   return (
-                    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm">
-                      <p className="font-semibold text-gray-900">
+                    <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-lg px-4 py-3 text-sm">
+                      <p className="font-semibold text-foreground">
                         {formatMonthFull(String(label ?? ""))}
                       </p>
                       <p className="text-emerald-600 font-bold">
@@ -735,7 +735,7 @@ export default function DashboardPage() {
                         expedientes
                       </p>
                       {payload[0].payload?.monto > 0 && (
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {formatMoney(payload[0].payload.monto)} en multas
                         </p>
                       )}
@@ -778,16 +778,16 @@ export default function DashboardPage() {
               return (
                 <div key={item.materia} className="group">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-sm font-medium text-muted-foreground">
                       {item.materia
                         .toLowerCase()
                         .replace(/\b\w/g, (c) => c.toUpperCase())}
                     </span>
-                    <span className="text-sm font-bold text-gray-900 tabular-nums">
+                    <span className="text-sm font-bold text-foreground tabular-nums">
                       {item.count.toLocaleString("es-MX")}
                     </span>
                   </div>
-                  <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700 ease-out group-hover:brightness-110"
                       style={{
@@ -831,12 +831,12 @@ export default function DashboardPage() {
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   return (
-                    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm">
-                      <p className="font-semibold text-gray-900 mb-2">{formatMonthFull(String(label ?? ""))}</p>
+                    <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-lg px-4 py-3 text-sm">
+                      <p className="font-semibold text-foreground mb-2">{formatMonthFull(String(label ?? ""))}</p>
                       {payload.map((entry) => (
                         <p key={String(entry.name)} className="flex items-center gap-2">
                           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: String(entry.color) }} />
-                          <span className="text-gray-600">{String(entry.name)}:</span>
+                          <span className="text-muted-foreground">{String(entry.name)}:</span>
                           <span className="font-semibold">{Number(entry.value).toLocaleString("es-MX")}</span>
                         </p>
                       ))}
@@ -897,15 +897,15 @@ export default function DashboardPage() {
                 <div key={orpa.clave} className="group">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold w-5 text-center ${isTop ? "text-emerald-600" : isBottom ? "text-red-500" : "text-gray-400"}`}>
+                      <span className={`text-xs font-bold w-5 text-center ${isTop ? "text-emerald-600" : isBottom ? "text-red-500" : "text-muted-foreground"}`}>
                         {i + 1}
                       </span>
-                      <span className="text-sm font-medium text-gray-700 truncate max-w-[180px]" title={orpa.nombre}>
+                      <span className="text-sm font-medium text-foreground truncate max-w-[180px]" title={orpa.nombre}>
                         {orpa.nombre}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400">{orpa.pagados}/{orpa.total}</span>
+                      <span className="text-xs text-muted-foreground">{orpa.pagados}/{orpa.total}</span>
                       <span className={`text-sm font-bold tabular-nums ${
                         orpa.cobPct >= 50 ? "text-emerald-600" :
                         orpa.cobPct >= 20 ? "text-amber-600" : "text-red-500"
@@ -914,7 +914,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden ml-7">
+                  <div className="h-2 bg-muted rounded-full overflow-hidden ml-7">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ${
                         orpa.cobPct >= 50 ? "bg-emerald-500" :
@@ -927,21 +927,21 @@ export default function DashboardPage() {
               );
             })}
             {(!data?.orpaRanking || data.orpaRanking.length === 0) && (
-              <p className="text-sm text-gray-400 text-center py-8">Sin datos suficientes para ranking</p>
+              <p className="text-sm text-muted-foreground text-center py-8">Sin datos suficientes para ranking</p>
             )}
           </div>
         </ChartCard>
       </div>
 
       {/* ORPA summary table */}
-      <Card className="border border-gray-200/60 shadow-sm hover:shadow-md transition-shadow duration-300">
+      <Card className="border border-border/60 shadow-sm hover:shadow-md transition-shadow duration-300">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base font-semibold text-gray-900">
+              <CardTitle className="text-base font-semibold text-foreground">
                 Resumen por ORPA
               </CardTitle>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Desglose completo por delegacion —{" "}
                 {data?.porOrpa.length || 0} ORPAs
               </p>
@@ -955,67 +955,67 @@ export default function DashboardPage() {
             <div className="overflow-x-auto -mx-6">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50/80">
-                    <th className="py-3 px-6 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
+                  <tr className="bg-muted/50">
+                    <th className="py-3 px-6 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider">
                       #
                     </th>
                     <th
-                      className="py-3 px-4 text-left font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("nombre")}
                     >
                       <span className="inline-flex items-center gap-1">ORPA <SortIcon column="nombre" /></span>
                     </th>
                     <th
-                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("total")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">Expedientes <SortIcon column="total" /></span>
                     </th>
                     <th
-                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("monto")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">Monto Total <SortIcon column="monto" /></span>
                     </th>
                     <th
-                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("pagados")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">Pagados <SortIcon column="pagados" /></span>
                     </th>
                     <th
-                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("impugnados")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">Impugnados <SortIcon column="impugnados" /></span>
                     </th>
                     <th
-                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("enviadosCobro")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">Enviados a cobro <SortIcon column="enviadosCobro" /></span>
                     </th>
                     <th
-                      className="py-3 px-4 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("pendientes")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">Pendientes <SortIcon column="pendientes" /></span>
                     </th>
                     <th
-                      className="py-3 px-6 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("cobPct")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">% Cobrado <SortIcon column="cobPct" /></span>
                     </th>
                     <th
-                      className="py-3 px-6 text-right font-medium text-gray-500 text-xs uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+                      className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("pendPct")}
                     >
                       <span className="inline-flex items-center justify-end gap-1">% Pendientes <SortIcon column="pendPct" /></span>
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-border">
                   {sortedOrpas.map((orpa, idx) => {
                     const cobPct =
                       orpa.total > 0 ? (orpa.pagados / orpa.total) * 100 : 0;
@@ -1024,25 +1024,25 @@ export default function DashboardPage() {
                     return (
                       <tr
                         key={orpa.clave}
-                        className="hover:bg-emerald-50/30 transition-colors duration-150"
+                        className="hover:bg-muted/30 transition-colors duration-150"
                       >
-                        <td className="py-3 px-6 text-gray-400 tabular-nums text-xs">
+                        <td className="py-3 px-6 text-muted-foreground tabular-nums text-xs">
                           {idx + 1}
                         </td>
                         <td className="py-3 px-4">
                           <div>
-                            <p className="font-medium text-gray-900">
+                            <p className="font-medium text-foreground">
                               {orpa.nombre}
                             </p>
-                            <p className="text-xs text-gray-400">
+                            <p className="text-xs text-muted-foreground">
                               {orpa.clave}
                             </p>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-right font-semibold text-gray-900 tabular-nums">
+                        <td className="py-3 px-4 text-right font-semibold text-foreground tabular-nums">
                           {orpa.total.toLocaleString("es-MX")}
                         </td>
-                        <td className="py-3 px-4 text-right font-semibold text-gray-900 tabular-nums">
+                        <td className="py-3 px-4 text-right font-semibold text-foreground tabular-nums">
                           {formatMoney(orpa.monto)}
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1050,7 +1050,7 @@ export default function DashboardPage() {
                             <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 tabular-nums">
                               {orpa.pagados}
                             </span>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoPagados)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(orpa.montoPagados)}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1058,13 +1058,13 @@ export default function DashboardPage() {
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
                                 orpa.impugnados > 0
-                                  ? "bg-rose-50 text-rose-600"
-                                  : "bg-gray-100 text-gray-500"
+                                  ? "bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-400"
+                                  : "bg-muted text-muted-foreground"
                               }`}
                             >
                               {orpa.impugnados}
                             </span>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoImpugnados)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(orpa.montoImpugnados)}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1072,13 +1072,13 @@ export default function DashboardPage() {
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
                                 orpa.enviadosCobro > 0
-                                  ? "bg-amber-50 text-amber-600"
-                                  : "bg-gray-100 text-gray-500"
+                                  ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400"
+                                  : "bg-muted text-muted-foreground"
                               }`}
                             >
                               {orpa.enviadosCobro}
                             </span>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoEnviadosCobro)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(orpa.montoEnviadosCobro)}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1086,18 +1086,18 @@ export default function DashboardPage() {
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
                                 orpa.pendientes > 0
-                                  ? "bg-indigo-50 text-indigo-600"
-                                  : "bg-gray-100 text-gray-500"
+                                  ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400"
+                                  : "bg-muted text-muted-foreground"
                               }`}
                             >
                               {orpa.pendientes}
                             </span>
-                            <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(orpa.montoPendientes)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(orpa.montoPendientes)}</p>
                           </div>
                         </td>
                         <td className="py-3 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-emerald-500 rounded-full"
                                 style={{
@@ -1105,14 +1105,14 @@ export default function DashboardPage() {
                                 }}
                               />
                             </div>
-                            <span className="text-xs font-medium text-gray-500 tabular-nums w-10 text-right">
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums w-10 text-right">
                               {cobPct.toFixed(0)}%
                             </span>
                           </div>
                         </td>
                         <td className="py-3 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-indigo-500 rounded-full"
                                 style={{
@@ -1120,7 +1120,7 @@ export default function DashboardPage() {
                                 }}
                               />
                             </div>
-                            <span className="text-xs font-medium text-gray-500 tabular-nums w-10 text-right">
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums w-10 text-right">
                               {pendPct.toFixed(0)}%
                             </span>
                           </div>
@@ -1131,37 +1131,37 @@ export default function DashboardPage() {
                 </tbody>
                 {data && (
                   <tfoot>
-                    <tr className="bg-gray-50/80 border-t-2 border-gray-200">
+                    <tr className="bg-muted/50 border-t-2 border-border">
                       <td className="py-3 px-6" />
-                      <td className="py-3 px-4 font-bold text-gray-900">
+                      <td className="py-3 px-4 font-bold text-foreground">
                         TOTAL
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-gray-900 tabular-nums">
+                      <td className="py-3 px-4 text-right font-bold text-foreground tabular-nums">
                         {data.totalExpedientes.toLocaleString("es-MX")}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-gray-900 tabular-nums">
+                      <td className="py-3 px-4 text-right font-bold text-foreground tabular-nums">
                         {formatMoney(data.montoTotal)}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-emerald-700 tabular-nums">{data.statusDist.pagados.toLocaleString("es-MX")}</span>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(data.montoPagado)}</p>
+                        <span className="font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{data.statusDist.pagados.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(data.montoPagado)}</p>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-rose-600 tabular-nums">{data.statusDist.impugnados.toLocaleString("es-MX")}</span>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoImpugnados, 0))}</p>
+                        <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">{data.statusDist.impugnados.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoImpugnados, 0))}</p>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-amber-600 tabular-nums">{data.statusDist.enviadosCobro.toLocaleString("es-MX")}</span>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoEnviadosCobro, 0))}</p>
+                        <span className="font-bold text-amber-600 dark:text-amber-400 tabular-nums">{data.statusDist.enviadosCobro.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoEnviadosCobro, 0))}</p>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-indigo-600 tabular-nums">{data.statusDist.pendientes.toLocaleString("es-MX")}</span>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoPendientes, 0))}</p>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{data.statusDist.pendientes.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoPendientes, 0))}</p>
                       </td>
-                      <td className="py-3 px-6 text-right font-bold text-gray-900 tabular-nums">
+                      <td className="py-3 px-6 text-right font-bold text-foreground tabular-nums">
                         {data.porcentajeCobrado.toFixed(1)}%
                       </td>
-                      <td className="py-3 px-6 text-right font-bold text-gray-900 tabular-nums">
+                      <td className="py-3 px-6 text-right font-bold text-foreground tabular-nums">
                         {data.totalExpedientes > 0
                           ? ((data.statusDist.pendientes / data.totalExpedientes) * 100).toFixed(1)
                           : "0.0"}%
@@ -1215,15 +1215,15 @@ export default function DashboardPage() {
                 if (!active || !payload?.length) return null;
                 const item = payload[0]?.payload;
                 return (
-                  <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm min-w-[180px]">
-                    <p className="font-semibold text-gray-900">{item?.nombreFull || label}</p>
-                    <p className="text-xs text-gray-400 mb-2">{label} — {item?.total} expedientes</p>
+                  <div className="bg-popover/95 backdrop-blur-sm border border-border rounded-xl shadow-lg px-4 py-3 text-sm min-w-[180px]">
+                    <p className="font-semibold text-foreground">{item?.nombreFull || label}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{label} — {item?.total} expedientes</p>
                     <div className="space-y-1">
                       {payload.map((entry) => (
                         <div key={String(entry.name)} className="flex items-center justify-between gap-4">
                           <div className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: String(entry.color) }} />
-                            <span className="text-gray-600">{String(entry.name)}</span>
+                            <span className="text-muted-foreground">{String(entry.name)}</span>
                           </div>
                           <span className="font-semibold tabular-nums">{Number(entry.value).toLocaleString("es-MX")}</span>
                         </div>
@@ -1241,7 +1241,7 @@ export default function DashboardPage() {
         </ResponsiveContainer>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-gray-100">
+        <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-border">
           {[
             { label: "Pagados", color: "#10B981" },
             { label: "Impugnados", color: "#EF4444" },
@@ -1250,7 +1250,7 @@ export default function DashboardPage() {
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
-              <span className="text-xs text-gray-600">{item.label}</span>
+              <span className="text-xs text-muted-foreground">{item.label}</span>
             </div>
           ))}
         </div>
@@ -1258,15 +1258,15 @@ export default function DashboardPage() {
 
       {/* ── SEGUIMIENTO DE PENDIENTES ── */}
       {!loading && data?.pendientes && (
-        <Card className="border border-gray-200/60 shadow-sm">
+        <Card className="border border-border/60 shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
               <Bell className="w-5 h-5 text-amber-500" />
-              <CardTitle className="text-base font-semibold text-gray-900">
+              <CardTitle className="text-base font-semibold text-foreground">
                 Seguimiento de Pendientes
               </CardTitle>
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               Expedientes pendientes de notificación, cobro y pago
             </p>
           </CardHeader>
