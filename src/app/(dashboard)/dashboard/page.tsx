@@ -61,9 +61,9 @@ interface DashboardData {
   porcentajeCobrado: number;
   statusDist: {
     pagados: number;
-    impugnados: number;
     enviadosCobro: number;
-    pendientes: number;
+    impugnados: number;
+    faltantesCobro: number;
   };
   monthlyTrend: Array<{ month: string; count: number; monto: number }>;
   porOrpa: Array<{
@@ -77,8 +77,8 @@ interface DashboardData {
     montoImpugnados: number;
     enviadosCobro: number;
     montoEnviadosCobro: number;
-    pendientes: number;
-    montoPendientes: number;
+    faltantesCobro: number;
+    montoFaltantesCobro: number;
   }>;
   porMateria: Array<{ materia: string; count: number }>;
   trends?: Array<{
@@ -97,8 +97,8 @@ interface DashboardData {
     total: number;
     pagados: number;
     cobPct: number;
-    pendientes: number;
-    pendPct: number;
+    faltantesCobro: number;
+    faltPct: number;
   }>;
   pendientes?: {
     notificacion: {
@@ -135,14 +135,14 @@ interface PendienteRow {
   semaforo: "verde" | "amarillo" | "rojo";
 }
 
-type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "pendientes" | "cobPct" | "pendPct";
+type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "faltantesCobro" | "cobPct" | "faltPct";
 type SortDir = "asc" | "desc";
 
 // ============================================================
 // Constants
 // ============================================================
 
-const PIE_COLORS = ["#10B981", "#EF4444", "#F59E0B", "#6366F1"];
+const PIE_COLORS = ["#10B981", "#F59E0B", "#EF4444", "#6366F1"];
 const MATERIA_COLORS: Record<string, string> = {
   INDUSTRIA: "#1B8A5A",
   FORESTAL: "#059669",
@@ -489,9 +489,9 @@ export default function DashboardPage() {
   const pieData = data
     ? [
         { name: "Pagados", value: data.statusDist.pagados },
-        { name: "Impugnados", value: data.statusDist.impugnados },
         { name: "Enviados a cobro", value: data.statusDist.enviadosCobro },
-        { name: "Pendientes", value: data.statusDist.pendientes },
+        { name: "Impugnados", value: data.statusDist.impugnados },
+        { name: "Faltantes a cobro", value: data.statusDist.faltantesCobro },
       ].filter((d) => d.value > 0)
     : [];
 
@@ -512,9 +512,9 @@ export default function DashboardPage() {
     if (sortKey === "cobPct") {
       va = a.total > 0 ? a.pagados / a.total : 0;
       vb = b.total > 0 ? b.pagados / b.total : 0;
-    } else if (sortKey === "pendPct") {
-      va = a.total > 0 ? a.pendientes / a.total : 0;
-      vb = b.total > 0 ? b.pendientes / b.total : 0;
+    } else if (sortKey === "faltPct") {
+      va = a.total > 0 ? a.faltantesCobro / a.total : 0;
+      vb = b.total > 0 ? b.faltantesCobro / b.total : 0;
     } else if (sortKey === "nombre") {
       va = a.nombre;
       vb = b.nombre;
@@ -1104,9 +1104,9 @@ export default function DashboardPage() {
                     </th>
                     <th
                       className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("pendientes")}
+                      onClick={() => toggleSort("faltantesCobro")}
                     >
-                      <span className="inline-flex items-center justify-end gap-1">Pendientes <SortIcon column="pendientes" /></span>
+                      <span className="inline-flex items-center justify-end gap-1">Faltantes <SortIcon column="faltantesCobro" /></span>
                     </th>
                     <th
                       className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
@@ -1116,9 +1116,9 @@ export default function DashboardPage() {
                     </th>
                     <th
                       className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("pendPct")}
+                      onClick={() => toggleSort("faltPct")}
                     >
-                      <span className="inline-flex items-center justify-end gap-1">% Pendientes <SortIcon column="pendPct" /></span>
+                      <span className="inline-flex items-center justify-end gap-1">% Faltantes <SortIcon column="faltPct" /></span>
                     </th>
                   </tr>
                 </thead>
@@ -1127,7 +1127,7 @@ export default function DashboardPage() {
                     const cobPct =
                       orpa.total > 0 ? (orpa.pagados / orpa.total) * 100 : 0;
                     const pendPct =
-                      orpa.total > 0 ? (orpa.pendientes / orpa.total) * 100 : 0;
+                      orpa.total > 0 ? (orpa.faltantesCobro / orpa.total) * 100 : 0;
                     return (
                       <tr
                         key={orpa.clave}
@@ -1192,14 +1192,14 @@ export default function DashboardPage() {
                           <div>
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
-                                orpa.pendientes > 0
+                                orpa.faltantesCobro > 0
                                   ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-400"
                                   : "bg-muted text-muted-foreground"
                               }`}
                             >
-                              {orpa.pendientes}
+                              {orpa.faltantesCobro}
                             </span>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(orpa.montoPendientes)}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(orpa.montoFaltantesCobro)}</p>
                           </div>
                         </td>
                         <td className="py-3 px-6 text-right">
@@ -1262,15 +1262,15 @@ export default function DashboardPage() {
                         <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoEnviadosCobro, 0))}</p>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{data.statusDist.pendientes.toLocaleString("es-MX")}</span>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoPendientes, 0))}</p>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400 tabular-nums">{data.statusDist.faltantesCobro.toLocaleString("es-MX")}</span>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatMoney(sortedOrpas.reduce((s, o) => s + o.montoFaltantesCobro, 0))}</p>
                       </td>
                       <td className="py-3 px-6 text-right font-bold text-foreground tabular-nums">
                         {data.porcentajeCobrado.toFixed(1)}%
                       </td>
                       <td className="py-3 px-6 text-right font-bold text-foreground tabular-nums">
                         {data.totalExpedientes > 0
-                          ? ((data.statusDist.pendientes / data.totalExpedientes) * 100).toFixed(1)
+                          ? ((data.statusDist.faltantesCobro / data.totalExpedientes) * 100).toFixed(1)
                           : "0.0"}%
                       </td>
                     </tr>
@@ -1285,7 +1285,7 @@ export default function DashboardPage() {
       {/* Stacked bar chart: status por ORPA */}
       <ChartCard
         title="Expedientes por estatus y ORPA"
-        subtitle="Pagados, impugnados, enviados a cobro y pendientes — barras apiladas"
+        subtitle="Pagados, enviados a cobro, impugnados y faltantes a cobro — barras apiladas"
         loading={loading}
       >
         <ResponsiveContainer width="100%" height={Math.max(450, (data?.porOrpa.length || 0) * 36)}>
@@ -1294,9 +1294,9 @@ export default function DashboardPage() {
               nombre: o.clave,
               nombreFull: o.nombre,
               Pagados: o.pagados,
-              Impugnados: o.impugnados,
               "Enviados a cobro": o.enviadosCobro,
-              Pendientes: o.pendientes,
+              Impugnados: o.impugnados,
+              "Faltantes a cobro": o.faltantesCobro,
               total: o.total,
             })) || []}
             layout="vertical"
@@ -1341,9 +1341,9 @@ export default function DashboardPage() {
               }}
             />
             <Bar dataKey="Pagados" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Impugnados" stackId="a" fill="#EF4444" />
             <Bar dataKey="Enviados a cobro" stackId="a" fill="#F59E0B" />
-            <Bar dataKey="Pendientes" stackId="a" fill="#6366F1" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="Impugnados" stackId="a" fill="#EF4444" />
+            <Bar dataKey="Faltantes a cobro" stackId="a" fill="#6366F1" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
 
@@ -1351,9 +1351,9 @@ export default function DashboardPage() {
         <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-border">
           {[
             { label: "Pagados", color: "#10B981" },
-            { label: "Impugnados", color: "#EF4444" },
             { label: "Enviados a cobro", color: "#F59E0B" },
-            { label: "Pendientes", color: "#6366F1" },
+            { label: "Impugnados", color: "#EF4444" },
+            { label: "Faltantes a cobro", color: "#6366F1" },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />

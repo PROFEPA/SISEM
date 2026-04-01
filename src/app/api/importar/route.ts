@@ -102,10 +102,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine impugnado based on tipo_impugnacion
+    // Exclude non-challenge types: NO PROMUEVE, PAGADO, SIN MULTA
+    // Note: CONMUTACION IS counted as impugnación per CIFRAS criteria
     const impugnado =
       row.tipo_impugnacion !== null &&
       row.tipo_impugnacion !== "NO PROMUEVE" &&
-      row.tipo_impugnacion !== "PAGADO";
+      row.tipo_impugnacion !== "PAGADO" &&
+      row.tipo_impugnacion !== "SIN MULTA";
 
     records.push({
       orpa_id: orpaId,

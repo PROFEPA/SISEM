@@ -86,15 +86,15 @@ export async function GET() {
     const totalExpedientes = allExpedientes?.length || 0;
 
     // Aggregation maps
-    const orpaStats = new Map<string, { nombre: string; clave: string; total: number; monto: number; pagados: number; montoPagados: number; impugnados: number; montoImpugnados: number; enviadosCobro: number; montoEnviadosCobro: number; pendientes: number; montoPendientes: number }>();
+    const orpaStats = new Map<string, { nombre: string; clave: string; total: number; monto: number; pagados: number; montoPagados: number; impugnados: number; montoImpugnados: number; enviadosCobro: number; montoEnviadosCobro: number; faltantesCobro: number; montoFaltantesCobro: number }>();
     const materiaDist = new Map<string, number>();
     const monthlyMap = new Map<string, { count: number; monto: number }>();
     // v3: monthly breakdown for trends
     const monthlyBreakdown = new Map<string, { impuestas: number; montoImpuesto: number; cobradas: number; montoCobrado: number; impugnadas: number }>();
 
-    // Status distribution — use *priority* classification (mutually exclusive)
-    // Priority: pagado > impugnado > enviado a cobro > pendiente
-    const statusDist = { pagados: 0, impugnados: 0, enviadosCobro: 0, pendientes: 0 };
+    // Status distribution — CIFRAS-compatible exclusive categories
+    // Priority: pagado > enviada_a_cobro > impugnado > faltante a cobro
+    const statusDist = { pagados: 0, enviadosCobro: 0, impugnados: 0, faltantesCobro: 0 };
     let montoTotal = 0;
     let montoPagado = 0;
 
@@ -109,32 +109,36 @@ export async function GET() {
           orpaStats.set(key, {
             nombre: orpa?.nombre || "Desconocida",
             clave: orpa?.clave || "?",
-            total: 0, monto: 0, pagados: 0, montoPagados: 0, impugnados: 0, montoImpugnados: 0, enviadosCobro: 0, montoEnviadosCobro: 0, pendientes: 0, montoPendientes: 0,
+            total: 0, monto: 0, pagados: 0, montoPagados: 0, impugnados: 0, montoImpugnados: 0, enviadosCobro: 0, montoEnviadosCobro: 0, faltantesCobro: 0, montoFaltantesCobro: 0,
           });
         }
         const stats = orpaStats.get(key)!;
         stats.total += 1;
         stats.monto += monto;
-        if (exp.pagado) { stats.pagados += 1; stats.montoPagados += monto; }
-        if (exp.impugnado) { stats.impugnados += 1; stats.montoImpugnados += monto; }
-        if (exp.pagado) { /* status already classified */ }
-        else if (exp.impugnado) { /* status already classified */ }
-        else if (exp.enviada_a_cobro) { stats.enviadosCobro += 1; stats.montoEnviadosCobro += monto; }
-        else { stats.pendientes += 1; stats.montoPendientes += monto; }
+        // CIFRAS exclusive classification: pagado > enviada_a_cobro > impugnado > faltante
+        if (exp.pagado) {
+          stats.pagados += 1; stats.montoPagados += monto;
+        } else if (exp.enviada_a_cobro) {
+          stats.enviadosCobro += 1; stats.montoEnviadosCobro += monto;
+        } else if (exp.impugnado) {
+          stats.impugnados += 1; stats.montoImpugnados += monto;
+        } else {
+          stats.faltantesCobro += 1; stats.montoFaltantesCobro += monto;
+        }
 
         // Totals
         montoTotal += monto;
         if (exp.pagado) montoPagado += monto;
 
-        // Status classification — mutually exclusive by priority
+        // CIFRAS-compatible exclusive classification
         if (exp.pagado) {
           statusDist.pagados += 1;
-        } else if (exp.impugnado) {
-          statusDist.impugnados += 1;
         } else if (exp.enviada_a_cobro) {
           statusDist.enviadosCobro += 1;
+        } else if (exp.impugnado) {
+          statusDist.impugnados += 1;
         } else {
-          statusDist.pendientes += 1;
+          statusDist.faltantesCobro += 1;
         }
 
         // Materia distribution — clean up bad values
@@ -220,8 +224,8 @@ export async function GET() {
         total: o.total,
         pagados: o.pagados,
         cobPct: o.total > 0 ? (o.pagados / o.total) * 100 : 0,
-        pendientes: o.pendientes,
-        pendPct: o.total > 0 ? (o.pendientes / o.total) * 100 : 0,
+        faltantesCobro: o.faltantesCobro,
+        faltPct: o.total > 0 ? (o.faltantesCobro / o.total) * 100 : 0,
       }))
       .sort((a, b) => b.cobPct - a.cobPct);
 
