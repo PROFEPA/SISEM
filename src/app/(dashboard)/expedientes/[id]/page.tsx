@@ -25,8 +25,12 @@ import {
   CheckCircle2,
   XCircle,
   Download,
+  ExternalLink,
+  Image,
+  File,
+  FolderOpen,
 } from "lucide-react";
-import type { IExpediente, IExpedienteHistorial } from "@/types";
+import type { IExpediente, IExpedienteHistorial, IExpedienteDocumento } from "@/types";
 
 function formatMoney(amount: number | null): string {
   if (amount === null || amount === undefined) return "—";
@@ -364,9 +368,61 @@ export default function ExpedienteDetallePage() {
               <CardTitle className="text-base">Documentos</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-4">
-                📁 Proximamente — Integración con Google Drive
-              </p>
+              {expediente.documentos && expediente.documentos.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Group by tipo_documento */}
+                  {Object.entries(
+                    expediente.documentos.reduce<Record<string, IExpedienteDocumento[]>>((acc, doc) => {
+                      const key = doc.tipo_documento || "OTRO";
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(doc);
+                      return acc;
+                    }, {})
+                  ).map(([tipo, docs]) => (
+                    <div key={tipo}>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">
+                        {tipo === "PAGO" ? "Pagos" : tipo === "COBRO" ? "Enviadas a cobro" : tipo === "IMPUGNACION" ? "Impugnación" : tipo}
+                      </p>
+                      <div className="space-y-1">
+                        {docs.map((doc) => {
+                          const ext = doc.nombre_archivo.split(".").pop()?.toLowerCase();
+                          const isImage = ["jpg", "jpeg", "png", "jfif", "gif", "webp", "bmp"].includes(ext || "");
+                          const isPdf = ext === "pdf";
+                          return (
+                            <a
+                              key={doc.id}
+                              href={doc.url_preview || "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 p-1.5 rounded hover:bg-muted transition-colors group text-sm"
+                            >
+                              {isPdf ? (
+                                <FileText className="h-4 w-4 text-red-500 shrink-0" />
+                              ) : isImage ? (
+                                <Image className="h-4 w-4 text-blue-500 shrink-0" />
+                              ) : (
+                                <File className="h-4 w-4 text-muted-foreground shrink-0" />
+                              )}
+                              <span className="truncate flex-1">{doc.nombre_archivo}</span>
+                              <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground pt-1">
+                    {expediente.documentos.length} documento{expediente.documentos.length !== 1 ? "s" : ""} vinculado{expediente.documentos.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <FolderOpen className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    No hay documentos vinculados
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

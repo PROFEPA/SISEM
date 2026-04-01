@@ -38,8 +38,16 @@ export async function GET(
     .eq("expediente_id", id)
     .order("created_at", { ascending: false });
 
+  // Get documentos vinculados
+  const { data: documentos } = await supabase
+    .from("expediente_documentos")
+    .select("*")
+    .eq("expediente_id", id)
+    .order("tipo_documento")
+    .order("nombre_archivo");
+
   return NextResponse.json({
-    data: { ...data, historial: historial || [] },
+    data: { ...data, historial: historial || [], documentos: documentos || [] },
     error: null,
     message: null,
   });

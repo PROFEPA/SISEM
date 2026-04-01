@@ -74,6 +74,8 @@ export interface IExpediente {
   // Relations
   orpa?: IOrpa;
   estatus?: IEstatusExpediente;
+  historial?: IExpedienteHistorial[];
+  documentos?: IExpedienteDocumento[];
 }
 
 export interface IExpedienteHistorial {

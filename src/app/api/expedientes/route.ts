@@ -66,25 +66,23 @@ export async function GET(request: NextRequest) {
   if (fechaNotifDesde) query = query.gte("fecha_notificacion", fechaNotifDesde);
   if (fechaNotifHasta) query = query.lte("fecha_notificacion", fechaNotifHasta);
   if (busqueda) {
-    // Use full-text search for queries >= 3 chars, ilike fallback for short queries
-    if (busqueda.length >= 3) {
-      // Convert search terms for tsquery: split, trim, join with &
-      const terms = busqueda
-        .trim()
-        .split(/\s+/)
-        .filter((t) => t.length > 0)
-        .map((t) => t.replace(/[^a-záéíóúñü0-9/.-]/gi, ""))
-        .filter((t) => t.length > 0);
-      if (terms.length > 0) {
-        const tsquery = terms.map((t) => `${t}:*`).join(" & ");
-        query = query.textSearch("search_vector", tsquery, { type: "plain", config: "spanish" });
-      }
-    } else {
-      const escaped = escapeIlike(busqueda);
-      query = query.or(
-        `numero_expediente.ilike.%${escaped}%,nombre_infractor.ilike.%${escaped}%,razon_social.ilike.%${escaped}%`
-      );
-    }
+    const trimmed = busqueda.trim();
+    const escaped = escapeIlike(trimmed);
+    // Always use ilike for reliable partial matching (expediente numbers have
+    // slashes/dots/hyphens that break full-text search tokenization)
+    query = query.or(
+      [
+        `numero_expediente.ilike.%${escaped}%`,
+        `nombre_infractor.ilike.%${escaped}%`,
+        `apellido_paterno.ilike.%${escaped}%`,
+        `apellido_materno.ilike.%${escaped}%`,
+        `razon_social.ilike.%${escaped}%`,
+        `rfc_infractor.ilike.%${escaped}%`,
+        `numero_acta.ilike.%${escaped}%`,
+        `numero_resolucion.ilike.%${escaped}%`,
+        `observaciones.ilike.%${escaped}%`,
+      ].join(",")
+    );
   }
 
   const from = (page - 1) * pageSize;
