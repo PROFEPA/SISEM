@@ -7,7 +7,7 @@ import {
   fechaLimiteCobro,
   formatDate,
 } from "@/lib/business-days";
-import { getResend, FROM_EMAIL } from "@/lib/email/client";
+import { sendEmail, FROM_EMAIL } from "@/lib/email/client";
 import {
   notificacionVencimientoTemplate,
   cobroVencimientoTemplate,
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
     // Send notification alerts
     if (notifAlerts.length > 0 && adminEmails.length > 0) {
       const { subject, html } = notificacionVencimientoTemplate(notifAlerts);
-      const { error: sendErr } = await getResend().emails.send({
+      const { error: sendErr } = await sendEmail({
         from: FROM_EMAIL,
         to: adminEmails,
         subject,
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
     // Send collection alerts
     if (cobroAlerts.length > 0 && adminEmails.length > 0) {
       const { subject, html } = cobroVencimientoTemplate(cobroAlerts);
-      const { error: sendErr } = await getResend().emails.send({
+      const { error: sendErr } = await sendEmail({
         from: FROM_EMAIL,
         to: adminEmails,
         subject,

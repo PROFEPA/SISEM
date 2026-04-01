@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import Image from "next/image";
+import { useTranslation } from "@/lib/i18n";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -22,6 +23,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+  const t = useTranslation();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +36,7 @@ export default function LoginPage() {
     });
 
     if (authError) {
-      setError("Credenciales incorrectas. Verifique su correo y contraseña.");
+      setError(t("auth.loginError"));
       setLoading(false);
       return;
     }
@@ -58,7 +60,7 @@ export default function LoginPage() {
         <div>
           <CardTitle className="text-2xl font-bold">SISEM</CardTitle>
           <CardDescription className="text-sm mt-1">
-            Sistema Integral de Seguimiento de Expedientes de Multas
+            {t("auth.loginSubtitle")}
           </CardDescription>
           <p className="text-xs text-muted-foreground mt-1">PROFEPA</p>
         </div>
@@ -66,7 +68,7 @@ export default function LoginPage() {
       <CardContent>
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Correo electrónico</Label>
+            <Label htmlFor="email">{t("auth.email")}</Label>
             <Input
               id="email"
               type="email"
@@ -78,7 +80,7 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Contraseña</Label>
+            <Label htmlFor="password">{t("auth.password")}</Label>
             <Input
               id="password"
               type="password"
@@ -92,7 +94,7 @@ export default function LoginPage() {
             <p className="text-sm text-destructive text-center">{error}</p>
           )}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Ingresando..." : "Ingresar"}
+            {loading ? t("common.loading") : t("auth.loginButton")}
           </Button>
         </form>
       </CardContent>

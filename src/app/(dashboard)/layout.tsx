@@ -39,6 +39,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 
 const NAV_ITEMS = [
@@ -292,6 +293,7 @@ export default function DashboardLayout({
             {profile && (
               <div className="flex items-center gap-2.5">
                 <ThemeToggle />
+                <LanguageToggle />
                 <NotificationBell
                   orpaId={profile.role === "admin" ? undefined : profile.orpa_id || undefined}
                 />
