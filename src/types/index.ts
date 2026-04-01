@@ -34,6 +34,7 @@ export interface IExpediente {
   id: string;
   orpa_id: string;
   numero_expediente: string;
+  numero_registro: number;
   materia: string | null;
   numero_acta: string | null;
   fecha_acta: string | null;

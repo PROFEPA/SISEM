@@ -139,14 +139,16 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Deduplicar por numero_expediente — conservar última ocurrencia
-  const dedupMap = new Map<string, (typeof records)[0]>();
+  // Asignar numero_registro para expedientes con múltiples registros
+  // (mismo expediente, diferente persona/multa)
+  const registroCounters = new Map<string, number>();
   for (const r of records) {
-    if (r.numero_expediente) dedupMap.set(r.numero_expediente, r);
+    const current = (registroCounters.get(r.numero_expediente) ?? 0) + 1;
+    registroCounters.set(r.numero_expediente, current);
+    (r as Record<string, unknown>).numero_registro = current;
   }
-  const dedupedRecords = Array.from(dedupMap.values());
 
-  if (dedupedRecords.length === 0) {
+  if (records.length === 0) {
     return NextResponse.json(
       {
         data: { parsed: 0, inserted: 0, errors: importErrors },
@@ -161,12 +163,12 @@ export async function POST(request: NextRequest) {
   const BATCH_SIZE = 100;
   let totalInserted = 0;
 
-  for (let i = 0; i < dedupedRecords.length; i += BATCH_SIZE) {
-    const batch = dedupedRecords.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
     const { data: inserted, error } = await supabase
       .from("expedientes")
       .upsert(batch, {
-        onConflict: "numero_expediente",
+        onConflict: "numero_expediente,numero_registro",
         ignoreDuplicates: false,
       })
       .select("id");
@@ -185,13 +187,12 @@ export async function POST(request: NextRequest) {
     data: {
       totalRows: parseResult.totalRows,
       parsed: parseResult.valid.length,
-      deduplicated: dedupedRecords.length,
       inserted: totalInserted,
       parseErrors: parseResult.errors.slice(0, 100),
       importErrors: importErrors.slice(0, 100),
       sheetName: parseResult.sheetName,
     },
     error: null,
-    message: `Se importaron ${totalInserted} expedientes de ${dedupedRecords.length} registros únicos (${parseResult.valid.length} válidos, ${parseResult.valid.length - dedupedRecords.length} duplicados eliminados)`,
+    message: `Se importaron ${totalInserted} expedientes de ${records.length} registros válidos`,
   });
 }
