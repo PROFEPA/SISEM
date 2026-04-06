@@ -17,8 +17,8 @@ export async function GET() {
 
   const { data: tipos, error: tiposError } = await supabase
     .from("tipos_impugnacion")
-    .select("id, clave, nombre")
-    .order("id");
+    .select("id, clave, nombre, orden")
+    .order("orden");
 
   if (tiposError) {
     return NextResponse.json(
@@ -29,8 +29,8 @@ export async function GET() {
 
   const { data: resultados, error: resError } = await supabase
     .from("resultados_impugnacion")
-    .select("id, tipo_impugnacion_clave, clave, nombre, favorable_profepa")
-    .order("id");
+    .select("id, tipo_impugnacion_clave, clave, nombre, favorable_profepa, orden")
+    .order("orden");
 
   if (resError) {
     return NextResponse.json(
