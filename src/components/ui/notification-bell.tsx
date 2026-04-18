@@ -1,3 +1,13 @@
+
+
+
+
+
+
+
+
+
+
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -73,6 +83,13 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevTotalRef = useRef<number>(0);
+  // Throttling: durante importaciones masivas podemos recibir miles de eventos.
+  // Evitar saturar el navegador y el API con un debounce de fetchAlertas y un
+  // rate-limit de toasts/notificaciones del navegador.
+  const fetchAlertasTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastNotifyRef = useRef<number>(0);
+  const recentEventCountRef = useRef<number>(0);
+  const recentEventWindowRef = useRef<number>(0);
 
   // Check browser notification permission
   useEffect(() => {
@@ -117,6 +134,31 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
     };
   }, [fetchAlertas]);
 
+  // Debounced alert refresh — coalesce rapid realtime events into 1 fetch per 10s
+  const scheduleFetchAlertas = useCallback(() => {
+    if (fetchAlertasTimeoutRef.current) return;
+    fetchAlertasTimeoutRef.current = setTimeout(() => {
+      fetchAlertasTimeoutRef.current = null;
+      fetchAlertas();
+    }, 10_000);
+  }, [fetchAlertas]);
+
+  // Rate limiter — allow at most 1 toast/notification per 3s and skip during bursts
+  const shouldNotify = useCallback(() => {
+    const now = Date.now();
+    // Detect burst: if we received >5 events in last 2s, stop notifying
+    if (now - recentEventWindowRef.current < 2000) {
+      recentEventCountRef.current++;
+    } else {
+      recentEventWindowRef.current = now;
+      recentEventCountRef.current = 1;
+    }
+    if (recentEventCountRef.current > 5) return false;
+    if (now - lastNotifyRef.current < 3000) return false;
+    lastNotifyRef.current = now;
+    return true;
+  }, []);
+
   // Supabase Realtime: listen for INSERT/UPDATE on expedientes
   useEffect(() => {
     const supabase = createClient();
@@ -136,14 +178,16 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
             { id: exp.id, numero_expediente: exp.numero_expediente },
             ...prev.slice(0, 9),
           ]);
-          toast.info(`Nuevo expediente: ${exp.numero_expediente}`);
-          showBrowserNotification(
-            "SISEM — Nuevo expediente",
-            exp.numero_expediente,
-            `/expedientes/${exp.id}`
-          );
-          // Refresh alerts
-          fetchAlertas();
+          if (shouldNotify()) {
+            toast.info(`Nuevo expediente: ${exp.numero_expediente}`);
+            showBrowserNotification(
+              "SISEM — Nuevo expediente",
+              exp.numero_expediente,
+              `/expedientes/${exp.id}`
+            );
+          }
+          // Refresh alerts (debounced)
+          scheduleFetchAlertas();
         }
       )
       .on(
@@ -162,15 +206,15 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
           };
           const old = payload.old as typeof exp;
 
-          // Notify on important status changes
-          if (exp.pagado && !old.pagado) {
+          // Notify on important status changes (rate-limited)
+          if (exp.pagado && !old.pagado && shouldNotify()) {
             toast.success(`Pago registrado: ${exp.numero_expediente}`);
             showBrowserNotification(
               "SISEM — Pago registrado",
               exp.numero_expediente,
               `/expedientes/${exp.id}`
             );
-          } else if (exp.impugnado && !old.impugnado) {
+          } else if (exp.impugnado && !old.impugnado && shouldNotify()) {
             toast.warning(`Impugnación registrada: ${exp.numero_expediente}`);
             showBrowserNotification(
               "SISEM — Impugnación",
@@ -178,8 +222,8 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
               `/expedientes/${exp.id}`
             );
           }
-          // Refresh alerts
-          fetchAlertas();
+          // Refresh alerts (debounced)
+          scheduleFetchAlertas();
         }
       )
       .subscribe();
@@ -187,7 +231,7 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchAlertas]);
+  }, [fetchAlertas, scheduleFetchAlertas, shouldNotify]);
 
   const totalAlertas = data
     ? data.resumen.pendientes_notificacion + data.resumen.pendientes_cobro
