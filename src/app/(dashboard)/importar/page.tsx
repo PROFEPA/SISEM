@@ -95,67 +95,145 @@ export default function ImportarPage() {
 }
 
 // ==================== TAB: EXPEDIENTES ====================
+interface BatchFileResult {
+  fileName: string;
+  status: "pending" | "uploading" | "done" | "error";
+  result?: ImportResult;
+  error?: string;
+}
+
 function ExpedientesTab({ orpas }: { orpas: IOrpa[] }) {
   const [orpaId, setOrpaId] = useState<string>("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [batchResults, setBatchResults] = useState<BatchFileResult[]>([]);
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.name.match(/\.xlsx?$/i)) {
-      setFile(droppedFile);
-      setResult(null);
-      setError(null);
-    } else {
-      setError("Solo se aceptan archivos Excel (.xlsx)");
+  const addFiles = useCallback((newFiles: File[]) => {
+    const xlsx = newFiles.filter((f) => f.name.match(/\.xlsx?$/i));
+    if (xlsx.length === 0) {
+      setGlobalError("Solo se aceptan archivos Excel (.xlsx)");
+      return;
     }
+    setFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name));
+      const dedup = xlsx.filter((f) => !existing.has(f.name));
+      return [...prev, ...dedup];
+    });
+    setBatchResults([]);
+    setGlobalError(null);
   }, []);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (selected) {
-      setFile(selected);
-      setResult(null);
-      setError(null);
-    }
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      addFiles(Array.from(e.dataTransfer.files));
+    },
+    [addFiles]
+  );
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selected = e.target.files;
+      if (selected && selected.length > 0) {
+        addFiles(Array.from(selected));
+        // reset input so re-selecting same file triggers change
+        e.target.value = "";
+      }
+    },
+    [addFiles]
+  );
+
+  const removeFile = useCallback((name: string) => {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
+    setBatchResults((prev) => prev.filter((r) => r.fileName !== name));
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setFiles([]);
+    setBatchResults([]);
+    setGlobalError(null);
   }, []);
 
   async function handleUpload() {
-    if (!file) return;
+    if (files.length === 0) return;
 
     setUploading(true);
-    setError(null);
-    setResult(null);
+    setGlobalError(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    if (orpaId && orpaId !== "auto") formData.append("orpa_id", orpaId);
+    // Inicializa estado de todos los archivos
+    const initial: BatchFileResult[] = files.map((f) => ({
+      fileName: f.name,
+      status: "pending",
+    }));
+    setBatchResults(initial);
 
-    try {
-      const res = await fetch("/api/importar", {
-        method: "POST",
-        body: formData,
-      });
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      setBatchResults((prev) =>
+        prev.map((r, idx) => (idx === i ? { ...r, status: "uploading" } : r))
+      );
 
-      const json = await res.json();
+      const formData = new FormData();
+      formData.append("file", f);
+      if (orpaId && orpaId !== "auto") formData.append("orpa_id", orpaId);
 
-      if (json.error && !json.data) {
-        setError(json.error);
-      } else if (json.data) {
-        setResult(json.data);
-        if (json.error) setError(json.error);
+      try {
+        const res = await fetch("/api/importar", {
+          method: "POST",
+          body: formData,
+        });
+        const json = await res.json();
+
+        if (json.error && !json.data) {
+          setBatchResults((prev) =>
+            prev.map((r, idx) =>
+              idx === i ? { ...r, status: "error", error: json.error } : r
+            )
+          );
+        } else if (json.data) {
+          setBatchResults((prev) =>
+            prev.map((r, idx) =>
+              idx === i
+                ? {
+                    ...r,
+                    status: "done",
+                    result: json.data,
+                    error: json.error ?? undefined,
+                  }
+                : r
+            )
+          );
+        }
+      } catch {
+        setBatchResults((prev) =>
+          prev.map((r, idx) =>
+            idx === i
+              ? { ...r, status: "error", error: "Error de conexión" }
+              : r
+          )
+        );
       }
-    } catch {
-      setError("Error de conexión al servidor");
-    } finally {
-      setUploading(false);
     }
+
+    setUploading(false);
   }
+
+  const totals = batchResults.reduce(
+    (acc, r) => {
+      if (r.result) {
+        acc.totalRows += r.result.totalRows;
+        acc.parsed += r.result.parsed;
+        acc.inserted += r.result.inserted;
+      }
+      if (r.status === "done") acc.filesOk++;
+      if (r.status === "error") acc.filesFail++;
+      return acc;
+    },
+    { totalRows: 0, parsed: 0, inserted: 0, filesOk: 0, filesFail: 0 }
+  );
 
   return (
     <>
@@ -163,8 +241,8 @@ function ExpedientesTab({ orpas }: { orpas: IOrpa[] }) {
         <CardHeader>
           <CardTitle className="text-base">Expedientes individuales</CardTitle>
           <CardDescription>
-            Archivo Excel con una fila por expediente. Columnas esperadas: ORPA,
-            Materia, No. Expediente, Fechas, Monto, etc.
+            Puede seleccionar o arrastrar <strong>múltiples archivos</strong>{" "}
+            (hasta los 32 estados). Se procesan uno por uno.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -183,62 +261,55 @@ function ExpedientesTab({ orpas }: { orpas: IOrpa[] }) {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              Si sube varios archivos, deje esta opción en &quot;Detectar
+              automáticamente&quot; para que cada archivo se asigne a su ORPA
+              según el nombre del archivo.
+            </p>
           </div>
         </CardContent>
       </Card>
 
-      <Dropzone
-        file={file}
+      <MultiDropzone
+        files={files}
         dragging={dragging}
         uploading={uploading}
+        batchResults={batchResults}
         onDrop={handleDrop}
         onDragOver={() => setDragging(true)}
         onDragLeave={() => setDragging(false)}
         onFileSelect={handleFileSelect}
-        onClear={() => {
-          setFile(null);
-          setResult(null);
-          setError(null);
-        }}
+        onRemoveFile={removeFile}
+        onClearAll={clearAll}
         onUpload={handleUpload}
       />
 
-      {error && <ErrorCard error={error} />}
+      {globalError && <ErrorCard error={globalError} />}
 
-      {result && (
+      {batchResults.length > 0 && !uploading && (
         <Card className="border-green-500/50">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-green-600">
               <CheckCircle2 className="w-5 h-5" />
-              Importación completada
+              Importación por lote completada
             </CardTitle>
+            <CardDescription>
+              {totals.filesOk} archivo(s) con éxito
+              {totals.filesFail > 0 && ` · ${totals.filesFail} con error`}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
-              <StatCell label="Filas en Excel" value={result.totalRows} />
-              <StatCell label="Válidos" value={result.parsed} />
-              <StatCell label="Importados" value={result.inserted} highlight />
+              <StatCell label="Filas totales" value={totals.totalRows} />
+              <StatCell label="Válidos" value={totals.parsed} />
+              <StatCell label="Importados" value={totals.inserted} highlight />
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Hoja:{" "}
-              <Badge variant="secondary" className="text-[10px]">
-                {result.sheetName}
-              </Badge>
-            </p>
-
-            {result.parseErrors.length > 0 && (
-              <ErrorList
-                title={`Errores de parseo (${result.parseErrors.length})`}
-                items={result.parseErrors}
-              />
-            )}
-            {result.importErrors.length > 0 && (
-              <ErrorList
-                title={`Errores de importación (${result.importErrors.length})`}
-                items={result.importErrors}
-              />
-            )}
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {batchResults.map((r) => (
+                <FileResultRow key={r.fileName} result={r} />
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -576,6 +647,194 @@ function ErrorList({
           </p>
         ))}
       </div>
+    </div>
+  );
+}
+
+interface MultiDropzoneProps {
+  files: File[];
+  dragging: boolean;
+  uploading: boolean;
+  batchResults: BatchFileResult[];
+  onDrop: (e: React.DragEvent) => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onRemoveFile: (name: string) => void;
+  onClearAll: () => void;
+  onUpload: () => void;
+}
+
+function MultiDropzone({
+  files,
+  dragging,
+  uploading,
+  batchResults,
+  onDrop,
+  onDragOver,
+  onDragLeave,
+  onFileSelect,
+  onRemoveFile,
+  onClearAll,
+  onUpload,
+}: MultiDropzoneProps) {
+  const getStatus = (name: string): BatchFileResult["status"] | null =>
+    batchResults.find((r) => r.fileName === name)?.status ?? null;
+
+  return (
+    <Card>
+      <CardContent className="p-6 space-y-4">
+        <div
+          className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+            dragging
+              ? "border-primary bg-primary/5"
+              : files.length > 0
+              ? "border-green-500/50 bg-green-500/5"
+              : "border-muted-foreground/25 hover:border-primary/50"
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            onDragOver();
+          }}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          <Upload className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
+          <p className="text-sm font-medium">
+            Arrastre uno o varios archivos Excel aquí
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            o haga clic para seleccionar (Ctrl/Shift para elegir múltiples)
+          </p>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            multiple
+            className="absolute inset-0 opacity-0 cursor-pointer"
+            onChange={onFileSelect}
+            disabled={uploading}
+          />
+        </div>
+
+        {files.length > 0 && (
+          <>
+            <div className="flex items-center justify-between text-xs">
+              <p className="font-medium">
+                {files.length} archivo(s) en cola
+              </p>
+              {!uploading && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={onClearAll}
+                >
+                  Limpiar todo
+                </Button>
+              )}
+            </div>
+
+            <div className="max-h-64 overflow-y-auto space-y-1 border rounded-md p-2">
+              {files.map((f) => {
+                const status = getStatus(f.name);
+                return (
+                  <div
+                    key={f.name}
+                    className="flex items-center gap-2 py-1 px-2 text-xs rounded hover:bg-muted/50"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="flex-1 truncate">{f.name}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {(f.size / 1024).toFixed(0)} KB
+                    </span>
+                    {status === "uploading" && (
+                      <Loader2 className="w-3 h-3 animate-spin text-primary shrink-0" />
+                    )}
+                    {status === "done" && (
+                      <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />
+                    )}
+                    {status === "error" && (
+                      <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
+                    )}
+                    {!uploading && !status && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={() => onRemoveFile(f.name)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <Button
+              className="w-full"
+              onClick={onUpload}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Importando... (
+                  {batchResults.filter((r) => r.status === "done" || r.status === "error").length}
+                  /{files.length})
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importar {files.length} archivo(s)
+                </>
+              )}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FileResultRow({ result }: { result: BatchFileResult }) {
+  const r = result.result;
+  return (
+    <div className="border rounded-md p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        {result.status === "done" ? (
+          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+        ) : (
+          <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+        )}
+        <span className="text-sm font-medium truncate flex-1">
+          {result.fileName}
+        </span>
+        {r && (
+          <Badge variant="secondary" className="text-[10px]">
+            {r.inserted}/{r.totalRows}
+          </Badge>
+        )}
+      </div>
+      {result.error && (
+        <p className="text-xs text-destructive">{result.error}</p>
+      )}
+      {r && (r.parseErrors.length > 0 || r.importErrors.length > 0) && (
+        <div className="space-y-1">
+          {r.parseErrors.length > 0 && (
+            <ErrorList
+              title={`Errores de parseo (${r.parseErrors.length})`}
+              items={r.parseErrors}
+            />
+          )}
+          {r.importErrors.length > 0 && (
+            <ErrorList
+              title={`Errores de importación (${r.importErrors.length})`}
+              items={r.importErrors}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

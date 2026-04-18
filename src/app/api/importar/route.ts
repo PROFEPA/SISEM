@@ -126,11 +126,17 @@ export async function POST(request: NextRequest) {
       row.tipo_impugnacion !== "PAGADO" &&
       row.tipo_impugnacion !== "SIN MULTA";
 
+    // nombre_infractor es NOT NULL en DB. Fallback: razon_social (personas morales) o "SIN DATO"
+    const nombreInfractor =
+      (row.nombre_infractor && row.nombre_infractor.trim()) ||
+      (row.razon_social && row.razon_social.trim()) ||
+      "SIN DATO";
+
     records.push({
       orpa_id: orpaId,
       numero_expediente: row.numero_expediente,
       materia: row.materia,
-      nombre_infractor: row.nombre_infractor ?? null,
+      nombre_infractor: nombreInfractor,
       apellido_paterno: row.apellido_paterno ?? null,
       apellido_materno: row.apellido_materno ?? null,
       razon_social: row.razon_social ?? null,
