@@ -220,13 +220,28 @@ function parseBoolean(val: unknown): boolean {
   return str === "SI" || str === "SÍ" || str === "S" || str === "1" || str === "TRUE";
 }
 
+// Rango válido para fechas de expedientes: 2019 en adelante, hasta un año futuro
+// (evita importar años tipo "0025", "1900", "2029" que son errores de captura)
+const MIN_VALID_DATE = "2019-01-01";
+const MAX_VALID_DATE = (() => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().split("T")[0];
+})();
+
+function isReasonableDate(iso: string | null): boolean {
+  if (!iso) return false;
+  return iso >= MIN_VALID_DATE && iso <= MAX_VALID_DATE;
+}
+
 function parseDate(val: unknown): string | null {
   if (isNullPlaceholder(val)) return null;
 
   // If it's a JS Date object (from Excel)
   if (val instanceof Date) {
     if (isNaN(val.getTime())) return null;
-    return val.toISOString().split("T")[0];
+    const iso = val.toISOString().split("T")[0];
+    return isReasonableDate(iso) ? iso : null;
   }
 
   // If it's a number (Excel serial date)
@@ -237,7 +252,8 @@ function parseDate(val: unknown): string | null {
         const y = date.y;
         const m = String(date.m).padStart(2, "0");
         const d = String(date.d).padStart(2, "0");
-        return `${y}-${m}-${d}`;
+        const iso = `${y}-${m}-${d}`;
+        return isReasonableDate(iso) ? iso : null;
       }
     } catch {
       return null;
@@ -256,13 +272,15 @@ function parseDate(val: unknown): string | null {
     if (y.length === 2) {
       y = parseInt(y) > 50 ? `19${y}` : `20${y}`;
     }
-    return `${y}-${m}-${d}`;
+    const iso = `${y}-${m}-${d}`;
+    return isReasonableDate(iso) ? iso : null;
   }
 
   // ISO format YYYY-MM-DD
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    const iso = `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    return isReasonableDate(iso) ? iso : null;
   }
 
   return null;
