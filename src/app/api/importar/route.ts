@@ -44,6 +44,22 @@ export async function POST(request: NextRequest) {
 
   // Parse Excel
   const buffer = await file.arrayBuffer();
+
+  // Detect CIFRAS concentrado files early to give a helpful error
+  const fileNameUpper = file.name.toUpperCase();
+  if (fileNameUpper.includes("CIFRAS") || fileNameUpper.startsWith("1.")) {
+    return NextResponse.json(
+      {
+        data: null,
+        error:
+          "Este archivo parece ser un concentrado CIFRAS (totales por ORPA), no un listado de expedientes. " +
+          "Use la pestaña 'Concentrado' para cargarlo.",
+        message: null,
+      },
+      { status: 400 }
+    );
+  }
+
   const parseResult = parseExcelBuffer(buffer, file.name);
 
   if (parseResult.valid.length === 0) {

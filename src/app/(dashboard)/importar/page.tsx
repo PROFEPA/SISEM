@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -11,8 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Upload,
   FileSpreadsheet,
@@ -20,6 +22,8 @@ import {
   AlertCircle,
   Loader2,
   X,
+  BarChart3,
+  FileText,
 } from "lucide-react";
 import type { IOrpa } from "@/types";
 
@@ -32,15 +36,18 @@ interface ImportResult {
   sheetName: string;
 }
 
+interface ConcentradoResult {
+  periodo: string;
+  parsed: number;
+  inserted: number;
+  notFound: string[];
+  totales: unknown;
+  sheetName: string;
+}
+
 export default function ImportarPage() {
   const supabase = createClient();
   const [orpas, setOrpas] = useState<IOrpa[]>([]);
-  const [orpaId, setOrpaId] = useState<string>("");
-  const [file, setFile] = useState<File | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -52,6 +59,49 @@ export default function ImportarPage() {
         if (data) setOrpas(data);
       });
   }, [supabase]);
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Importar Excel</h1>
+        <p className="text-muted-foreground text-sm">
+          Cargue archivos de expedientes individuales por ORPA, o concentrados
+          mensuales (CIFRAS) con totales agregados
+        </p>
+      </div>
+
+      <Tabs defaultValue="expedientes" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="expedientes">
+            <FileText className="w-4 h-4 mr-2" />
+            Expedientes por ORPA
+          </TabsTrigger>
+          <TabsTrigger value="concentrado">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Concentrado (CIFRAS)
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="expedientes" className="space-y-6">
+          <ExpedientesTab orpas={orpas} />
+        </TabsContent>
+
+        <TabsContent value="concentrado" className="space-y-6">
+          <ConcentradoTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ==================== TAB: EXPEDIENTES ====================
+function ExpedientesTab({ orpas }: { orpas: IOrpa[] }) {
+  const [orpaId, setOrpaId] = useState<string>("");
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -84,7 +134,7 @@ export default function ImportarPage() {
 
     const formData = new FormData();
     formData.append("file", file);
-    if (orpaId) formData.append("orpa_id", orpaId);
+    if (orpaId && orpaId !== "auto") formData.append("orpa_id", orpaId);
 
     try {
       const res = await fetch("/api/importar", {
@@ -108,17 +158,14 @@ export default function ImportarPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Importar Excel</h1>
-        <p className="text-muted-foreground text-sm">
-          Cargue archivos Excel de multas por ORPA para importar al sistema
-        </p>
-      </div>
-
+    <>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Configuración</CardTitle>
+          <CardTitle className="text-base">Expedientes individuales</CardTitle>
+          <CardDescription>
+            Archivo Excel con una fila por expediente. Columnas esperadas: ORPA,
+            Materia, No. Expediente, Fechas, Monto, etc.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -140,144 +187,211 @@ export default function ImportarPage() {
         </CardContent>
       </Card>
 
-      {/* Dropzone */}
-      <Card>
-        <CardContent className="p-6">
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragging
-                ? "border-primary bg-primary/5"
-                : file
-                ? "border-green-500 bg-green-50"
-                : "border-muted-foreground/25 hover:border-primary/50"
-            }`}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={handleDrop}
-          >
-            {file ? (
-              <div className="flex items-center justify-center gap-3">
-                <FileSpreadsheet className="w-8 h-8 text-green-600" />
-                <div className="text-left">
-                  <p className="font-medium text-sm">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(file.size / 1024).toFixed(0)} KB
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => { setFile(null); setResult(null); }}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <Upload className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
-                <p className="text-sm font-medium">
-                  Arrastre un archivo Excel aquí
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  o haga clic para seleccionar
-                </p>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={handleFileSelect}
-                  style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
-                />
-              </>
-            )}
-          </div>
+      <Dropzone
+        file={file}
+        dragging={dragging}
+        uploading={uploading}
+        onDrop={handleDrop}
+        onDragOver={() => setDragging(true)}
+        onDragLeave={() => setDragging(false)}
+        onFileSelect={handleFileSelect}
+        onClear={() => {
+          setFile(null);
+          setResult(null);
+          setError(null);
+        }}
+        onUpload={handleUpload}
+      />
 
-          {file && (
-            <Button
-              className="w-full mt-4"
-              onClick={handleUpload}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Importando...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Importar archivo
-                </>
-              )}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      {error && <ErrorCard error={error} />}
 
-      {/* Error */}
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-            <p className="text-sm text-destructive">{error}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Results */}
       {result && (
-        <Card className="border-green-500">
+        <Card className="border-green-500/50">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2 text-green-700">
+            <CardTitle className="text-base flex items-center gap-2 text-green-600">
               <CheckCircle2 className="w-5 h-5" />
               Importación completada
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-3 bg-muted rounded-lg">
-                <p className="text-2xl font-bold">{result.totalRows}</p>
-                <p className="text-xs text-muted-foreground">Filas en Excel</p>
-              </div>
-              <div className="text-center p-3 bg-muted rounded-lg">
-                <p className="text-2xl font-bold">{result.parsed}</p>
-                <p className="text-xs text-muted-foreground">Válidos</p>
-              </div>
-              <div className="text-center p-3 bg-green-50 rounded-lg">
-                <p className="text-2xl font-bold text-green-700">{result.inserted}</p>
-                <p className="text-xs text-muted-foreground">Importados</p>
-              </div>
+              <StatCell label="Filas en Excel" value={result.totalRows} />
+              <StatCell label="Válidos" value={result.parsed} />
+              <StatCell label="Importados" value={result.inserted} highlight />
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Hoja: <Badge variant="secondary" className="text-[10px]">{result.sheetName}</Badge>
+              Hoja:{" "}
+              <Badge variant="secondary" className="text-[10px]">
+                {result.sheetName}
+              </Badge>
             </p>
 
             {result.parseErrors.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-destructive mb-1">
-                  Errores de parseo ({result.parseErrors.length}):
-                </p>
-                <div className="max-h-32 overflow-y-auto text-xs space-y-0.5">
-                  {result.parseErrors.map((e, i) => (
-                    <p key={i} className="text-muted-foreground">
-                      Fila {e.row}: {e.error}
-                    </p>
-                  ))}
-                </div>
-              </div>
+              <ErrorList
+                title={`Errores de parseo (${result.parseErrors.length})`}
+                items={result.parseErrors}
+              />
             )}
-
             {result.importErrors.length > 0 && (
+              <ErrorList
+                title={`Errores de importación (${result.importErrors.length})`}
+                items={result.importErrors}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </>
+  );
+}
+
+// ==================== TAB: CONCENTRADO ====================
+function ConcentradoTab() {
+  const [file, setFile] = useState<File | null>(null);
+  const [periodo, setPeriodo] = useState<string>("");
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<ConcentradoResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && droppedFile.name.match(/\.xlsx?$/i)) {
+      setFile(droppedFile);
+      setResult(null);
+      setError(null);
+      const auto = detectPeriodoFromName(droppedFile.name);
+      if (auto) setPeriodo(auto);
+    } else {
+      setError("Solo se aceptan archivos Excel (.xlsx)");
+    }
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) {
+      setFile(selected);
+      setResult(null);
+      setError(null);
+      const auto = detectPeriodoFromName(selected.name);
+      if (auto) setPeriodo(auto);
+    }
+  }, []);
+
+  async function handleUpload() {
+    if (!file) return;
+
+    setUploading(true);
+    setError(null);
+    setResult(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    if (periodo) formData.append("periodo", periodo);
+
+    try {
+      const res = await fetch("/api/importar/concentrado", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+
+      if (json.error && !json.data) {
+        setError(json.error);
+      } else if (json.data) {
+        setResult(json.data);
+        if (json.error) setError(json.error);
+      }
+    } catch {
+      setError("Error de conexión al servidor");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Concentrado mensual (CIFRAS)</CardTitle>
+          <CardDescription>
+            Archivo Excel con totales agregados por ORPA (una fila por entidad).
+            Típicamente se llama &quot;1. CIFRAS [MES] [AÑO].xlsx&quot;.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Periodo (formato YYYY-MM, se detecta automáticamente)</Label>
+            <Input
+              type="text"
+              placeholder="Ej: 2026-03"
+              value={periodo}
+              onChange={(e) => setPeriodo(e.target.value)}
+              pattern="\d{4}-\d{2}"
+            />
+            <p className="text-xs text-muted-foreground">
+              Si ya existe un concentrado para este periodo, será sobrescrito.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dropzone
+        file={file}
+        dragging={dragging}
+        uploading={uploading}
+        onDrop={handleDrop}
+        onDragOver={() => setDragging(true)}
+        onDragLeave={() => setDragging(false)}
+        onFileSelect={handleFileSelect}
+        onClear={() => {
+          setFile(null);
+          setResult(null);
+          setError(null);
+          setPeriodo("");
+        }}
+        onUpload={handleUpload}
+      />
+
+      {error && <ErrorCard error={error} />}
+
+      {result && (
+        <Card className="border-green-500/50">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="w-5 h-5" />
+              Concentrado guardado
+            </CardTitle>
+            <CardDescription>
+              Periodo: <Badge variant="secondary">{result.periodo}</Badge>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <StatCell label="ORPAs leídas" value={result.parsed} />
+              <StatCell label="ORPAs guardadas" value={result.inserted} highlight />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Hoja:{" "}
+              <Badge variant="secondary" className="text-[10px]">
+                {result.sheetName}
+              </Badge>
+            </p>
+
+            {result.notFound.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-destructive mb-1">
-                  Errores de importación ({result.importErrors.length}):
+                <p className="text-xs font-medium text-amber-600 mb-1">
+                  ORPAs no reconocidas ({result.notFound.length}):
                 </p>
                 <div className="max-h-32 overflow-y-auto text-xs space-y-0.5">
-                  {result.importErrors.map((e, i) => (
+                  {result.notFound.map((n, i) => (
                     <p key={i} className="text-muted-foreground">
-                      Fila {e.row}: {e.error}
+                      • {n}
                     </p>
                   ))}
                 </div>
@@ -286,6 +400,182 @@ export default function ImportarPage() {
           </CardContent>
         </Card>
       )}
+    </>
+  );
+}
+
+// ==================== HELPERS ====================
+const MESES: Record<string, string> = {
+  ENERO: "01", FEBRERO: "02", MARZO: "03", ABRIL: "04",
+  MAYO: "05", JUNIO: "06", JULIO: "07", AGOSTO: "08",
+  SEPTIEMBRE: "09", OCTUBRE: "10", NOVIEMBRE: "11", DICIEMBRE: "12",
+};
+
+function detectPeriodoFromName(fileName: string): string | null {
+  const name = fileName.replace(/\.xlsx?$/i, "").toUpperCase();
+  const yearMatch = name.match(/20\d{2}/);
+  const year = yearMatch ? yearMatch[0] : null;
+  for (const [mesName, mesNum] of Object.entries(MESES)) {
+    if (name.includes(mesName)) {
+      return year ? `${year}-${mesNum}` : null;
+    }
+  }
+  return null;
+}
+
+interface DropzoneProps {
+  file: File | null;
+  dragging: boolean;
+  uploading: boolean;
+  onDrop: (e: React.DragEvent) => void;
+  onDragOver: () => void;
+  onDragLeave: () => void;
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onClear: () => void;
+  onUpload: () => void;
+}
+
+function Dropzone({
+  file,
+  dragging,
+  uploading,
+  onDrop,
+  onDragOver,
+  onDragLeave,
+  onFileSelect,
+  onClear,
+  onUpload,
+}: DropzoneProps) {
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div
+          className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            dragging
+              ? "border-primary bg-primary/5"
+              : file
+              ? "border-green-500/50 bg-green-500/5"
+              : "border-muted-foreground/25 hover:border-primary/50"
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            onDragOver();
+          }}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          {file ? (
+            <div className="flex items-center justify-center gap-3">
+              <FileSpreadsheet className="w-8 h-8 text-green-600" />
+              <div className="text-left">
+                <p className="font-medium text-sm">{file.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(file.size / 1024).toFixed(0)} KB
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={onClear}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Upload className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
+              <p className="text-sm font-medium">
+                Arrastre un archivo Excel aquí
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                o haga clic para seleccionar
+              </p>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={onFileSelect}
+              />
+            </>
+          )}
+        </div>
+
+        {file && (
+          <Button
+            className="w-full mt-4"
+            onClick={onUpload}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Importando...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 mr-2" />
+                Importar archivo
+              </>
+            )}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ErrorCard({ error }: { error: string }) {
+  return (
+    <Card className="border-destructive/50">
+      <CardContent className="p-4 flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+        <p className="text-sm text-destructive">{error}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`text-center p-3 rounded-lg ${
+        highlight ? "bg-green-500/10" : "bg-muted"
+      }`}
+    >
+      <p className={`text-2xl font-bold ${highlight ? "text-green-600" : ""}`}>
+        {value}
+      </p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function ErrorList({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ row: number; error: string }>;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium text-destructive mb-1">{title}:</p>
+      <div className="max-h-32 overflow-y-auto text-xs space-y-0.5">
+        {items.map((e, i) => (
+          <p key={i} className="text-muted-foreground">
+            Fila {e.row}: {e.error}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }
