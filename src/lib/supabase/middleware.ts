@@ -47,50 +47,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Role-based access control for protected paths
-  if (user) {
-    const pathname = request.nextUrl.pathname;
-    const needsRole =
-      pathname.startsWith("/admin") ||
-      pathname.startsWith("/importar") ||
-      pathname.startsWith("/captura") ||
-      pathname.startsWith("/api/admin") ||
-      pathname.startsWith("/api/importar");
-
-    if (needsRole) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, activo")
-        .eq("id", user.id)
-        .single();
-
-      if (!profile || !profile.activo) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/dashboard";
-        return NextResponse.redirect(url);
-      }
-
-      // /admin/* — admin only
-      if (
-        (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) &&
-        profile.role !== "admin"
-      ) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/dashboard";
-        return NextResponse.redirect(url);
-      }
-
-      // /importar, /captura — admin or capturador
-      if (
-        (pathname.startsWith("/importar") || pathname.startsWith("/api/importar") || pathname.startsWith("/captura")) &&
-        !["admin", "capturador"].includes(profile.role)
-      ) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/dashboard";
-        return NextResponse.redirect(url);
-      }
-    }
-  }
+  // Role-based access control is handled at the page/layout level to avoid
+  // extra DB round-trips in the Edge middleware (prevents MIDDLEWARE_INVOCATION_TIMEOUT).
 
   return supabaseResponse;
 }
