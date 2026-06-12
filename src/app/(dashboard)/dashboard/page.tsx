@@ -491,7 +491,7 @@ export default function DashboardPage() {
         { name: "Pagados", value: data.statusDist.pagados },
         { name: "Enviados a cobro", value: data.statusDist.enviadosCobro },
         { name: "Impugnados", value: data.statusDist.impugnados },
-        { name: "Faltantes a cobro", value: data.statusDist.faltantesCobro },
+        { name: "Pendientes de enviar a cobro", value: data.statusDist.faltantesCobro },
       ].filter((d) => d.value > 0)
     : [];
 
@@ -598,10 +598,10 @@ export default function DashboardPage() {
               delay={100}
             />
             <AnimatedKPI
-              title="Porcentaje Cobrado"
-              rawValue={Math.round(data.porcentajeCobrado * 10)}
-              formattedValue={`${data.porcentajeCobrado.toFixed(1)}%`}
-              subtitle={`${formatMoney(data.montoPagado)} recuperados`}
+              title="Porcentaje Pagado"
+              rawValue={Math.round(data.montoPagado)}
+              formattedValue={formatMoney(data.montoPagado)}
+              subtitle={`${data.porcentajeCobrado.toFixed(1)}% del monto total recuperado`}
               icon={TrendingUp}
               iconBg="bg-violet-50"
               iconColor="text-violet-600"
@@ -609,12 +609,12 @@ export default function DashboardPage() {
               delay={200}
             />
             <AnimatedKPI
-              title="Expedientes Impugnados"
+              title="Expedientes Impugnados o con Recurso"
               rawValue={data.statusDist.impugnados}
               formattedValue={data.statusDist.impugnados.toLocaleString(
                 "es-MX"
               )}
-              subtitle="Con recurso o amparo"
+              subtitle="Conmutación, Amparo, Nulidad, Reconsideración, Revisión, Revocación o modificación"
               icon={Scale}
               iconBg="bg-rose-50"
               iconColor="text-rose-500"
@@ -1112,7 +1112,7 @@ export default function DashboardPage() {
                       className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("cobPct")}
                     >
-                      <span className="inline-flex items-center justify-end gap-1">% Cobrado <SortIcon column="cobPct" /></span>
+                      <span className="inline-flex items-center justify-end gap-1">% Pagado <SortIcon column="cobPct" /></span>
                     </th>
                     <th
                       className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
@@ -1285,7 +1285,7 @@ export default function DashboardPage() {
       {/* Stacked bar chart: status por ORPA */}
       <ChartCard
         title="Expedientes por estatus y ORPA"
-        subtitle="Pagados, enviados a cobro, impugnados y faltantes a cobro — barras apiladas"
+        subtitle="Pagados, enviados a cobro, impugnados y pendientes de enviar a cobro — barras apiladas"
         loading={loading}
       >
         <ResponsiveContainer width="100%" height={Math.max(450, (data?.porOrpa.length || 0) * 36)}>
@@ -1296,7 +1296,7 @@ export default function DashboardPage() {
               Pagados: o.pagados,
               "Enviados a cobro": o.enviadosCobro,
               Impugnados: o.impugnados,
-              "Faltantes a cobro": o.faltantesCobro,
+              "Pendientes de enviar a cobro": o.faltantesCobro,
               total: o.total,
             })) || []}
             layout="vertical"
@@ -1343,7 +1343,7 @@ export default function DashboardPage() {
             <Bar dataKey="Pagados" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
             <Bar dataKey="Enviados a cobro" stackId="a" fill="#F59E0B" />
             <Bar dataKey="Impugnados" stackId="a" fill="#EF4444" />
-            <Bar dataKey="Faltantes a cobro" stackId="a" fill="#6366F1" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="Pendientes de enviar a cobro" stackId="a" fill="#6366F1" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
 
@@ -1353,7 +1353,7 @@ export default function DashboardPage() {
             { label: "Pagados", color: "#10B981" },
             { label: "Enviados a cobro", color: "#F59E0B" },
             { label: "Impugnados", color: "#EF4444" },
-            { label: "Faltantes a cobro", color: "#6366F1" },
+            { label: "Pendientes de enviar a cobro", color: "#6366F1" },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }} />
