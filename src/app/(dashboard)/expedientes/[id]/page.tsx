@@ -32,6 +32,12 @@ import {
 } from "lucide-react";
 import type { IExpediente, IExpedienteHistorial, IExpedienteDocumento } from "@/types";
 
+// Enlace compartido de la carpeta de documentación en SharePoint (temporal
+// mientras se migra al servidor). Los enlaces directos a archivos solo abren
+// si el navegador visitó antes este enlace, por eso se ofrece junto a la lista.
+const SHAREPOINT_DOCS_URL =
+  "https://profepamx-my.sharepoint.com/:f:/g/personal/eugenio_espinosa_profepa_gob_mx/IgAefsV7ZCNdQIdvtioekKauAdFqNuDUp3a0urL7yun5XrE?e=qIpKKS";
+
 function formatMoney(amount: number | null): string {
   if (amount === null || amount === undefined) return "—";
   return new Intl.NumberFormat("es-MX", {
@@ -365,7 +371,19 @@ export default function ExpedienteDetallePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Documentos</CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base">Documentos</CardTitle>
+                <a
+                  href={SHAREPOINT_DOCS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Si un documento no abre, entra primero a la carpeta compartida para activar el acceso"
+                  className="text-xs text-primary hover:underline inline-flex items-center gap-1 shrink-0"
+                >
+                  Carpeta compartida
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
             </CardHeader>
             <CardContent>
               {expediente.documentos && expediente.documentos.length > 0 ? (
