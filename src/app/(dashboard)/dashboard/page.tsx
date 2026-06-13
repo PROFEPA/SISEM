@@ -488,9 +488,9 @@ export default function DashboardPage() {
 
   const pieData = data
     ? [
-        { name: "Pagados", value: data.statusDist.pagados },
-        { name: "Enviados a cobro", value: data.statusDist.enviadosCobro },
-        { name: "Impugnados", value: data.statusDist.impugnados },
+        { name: "Pagadas", value: data.statusDist.pagados },
+        { name: "Enviadas a cobro", value: data.statusDist.enviadosCobro },
+        { name: "Impugnadas/Recurso", value: data.statusDist.impugnados },
         { name: "Pendientes de enviar a cobro", value: data.statusDist.faltantesCobro },
       ].filter((d) => d.value > 0)
     : [];
@@ -598,10 +598,10 @@ export default function DashboardPage() {
               delay={100}
             />
             <AnimatedKPI
-              title="Porcentaje Pagado"
+              title="Monto total pagado"
               rawValue={Math.round(data.montoPagado)}
               formattedValue={formatMoney(data.montoPagado)}
-              subtitle={`${data.porcentajeCobrado.toFixed(1)}% del monto total recuperado`}
+              subtitle={`Porcentaje pagado: ${data.porcentajeCobrado.toFixed(1)}% del monto total`}
               icon={TrendingUp}
               iconBg="bg-violet-50"
               iconColor="text-violet-600"
@@ -915,7 +915,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Line chart: impuestas vs cobradas mensualmente */}
         <ChartCard
-          title="Multas impuestas vs cobradas"
+          title="Multas impuestas vs pagadas"
           subtitle="Comparativa mensual de resoluciones y pagos"
           loading={loading}
         >
@@ -970,7 +970,7 @@ export default function DashboardPage() {
               <Line
                 type="monotone"
                 dataKey="cobradas"
-                name="Cobradas"
+                name="Pagadas"
                 stroke="#10B981"
                 strokeWidth={2}
                 dot={{ r: 3 }}
@@ -993,7 +993,7 @@ export default function DashboardPage() {
         {/* ORPA Ranking: % cobrado */}
         <ChartCard
           title="Ranking de cumplimiento por ORPA"
-          subtitle="% de expedientes cobrados (mín. 3 expedientes)"
+          subtitle="% de expedientes pagados (mín. 3 expedientes)"
           loading={loading}
         >
           <div className="space-y-2.5 py-1 max-h-[300px] overflow-y-auto">
@@ -1088,19 +1088,19 @@ export default function DashboardPage() {
                       className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("pagados")}
                     >
-                      <span className="inline-flex items-center justify-end gap-1">Pagados <SortIcon column="pagados" /></span>
+                      <span className="inline-flex items-center justify-end gap-1">Pagadas <SortIcon column="pagados" /></span>
                     </th>
                     <th
                       className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("impugnados")}
                     >
-                      <span className="inline-flex items-center justify-end gap-1">Impugnados <SortIcon column="impugnados" /></span>
+                      <span className="inline-flex items-center justify-end gap-1">Impugnadas/Recurso <SortIcon column="impugnados" /></span>
                     </th>
                     <th
                       className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                       onClick={() => toggleSort("enviadosCobro")}
                     >
-                      <span className="inline-flex items-center justify-end gap-1">Enviados a cobro <SortIcon column="enviadosCobro" /></span>
+                      <span className="inline-flex items-center justify-end gap-1">Enviadas a cobro <SortIcon column="enviadosCobro" /></span>
                     </th>
                     <th
                       className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
@@ -1285,7 +1285,7 @@ export default function DashboardPage() {
       {/* Stacked bar chart: status por ORPA */}
       <ChartCard
         title="Expedientes por estatus y ORPA"
-        subtitle="Pagados, enviados a cobro, impugnados y pendientes de enviar a cobro — barras apiladas"
+        subtitle="Pagadas, enviadas a cobro, impugnadas/recurso y pendientes de enviar a cobro — barras apiladas"
         loading={loading}
       >
         <ResponsiveContainer width="100%" height={Math.max(450, (data?.porOrpa.length || 0) * 36)}>
@@ -1293,9 +1293,9 @@ export default function DashboardPage() {
             data={data?.porOrpa.map((o) => ({
               nombre: o.clave,
               nombreFull: o.nombre,
-              Pagados: o.pagados,
-              "Enviados a cobro": o.enviadosCobro,
-              Impugnados: o.impugnados,
+              Pagadas: o.pagados,
+              "Enviadas a cobro": o.enviadosCobro,
+              "Impugnadas/Recurso": o.impugnados,
               "Pendientes de enviar a cobro": o.faltantesCobro,
               total: o.total,
             })) || []}
@@ -1340,9 +1340,9 @@ export default function DashboardPage() {
                 );
               }}
             />
-            <Bar dataKey="Pagados" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Enviados a cobro" stackId="a" fill="#F59E0B" />
-            <Bar dataKey="Impugnados" stackId="a" fill="#EF4444" />
+            <Bar dataKey="Pagadas" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="Enviadas a cobro" stackId="a" fill="#F59E0B" />
+            <Bar dataKey="Impugnadas/Recurso" stackId="a" fill="#EF4444" />
             <Bar dataKey="Pendientes de enviar a cobro" stackId="a" fill="#6366F1" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -1350,9 +1350,9 @@ export default function DashboardPage() {
         {/* Legend */}
         <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-border">
           {[
-            { label: "Pagados", color: "#10B981" },
-            { label: "Enviados a cobro", color: "#F59E0B" },
-            { label: "Impugnados", color: "#EF4444" },
+            { label: "Pagadas", color: "#10B981" },
+            { label: "Enviadas a cobro", color: "#F59E0B" },
+            { label: "Impugnadas/Recurso", color: "#EF4444" },
             { label: "Pendientes de enviar a cobro", color: "#6366F1" },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-1.5">
