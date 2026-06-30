@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
   const tipoPersona = searchParams.get("tipo_persona");
   const fechaNotifDesde = searchParams.get("fecha_notificacion_desde");
   const fechaNotifHasta = searchParams.get("fecha_notificacion_hasta");
+  // "pendiente de notificar" = con resolución pero sin fecha de notificación
+  const notifPendiente = searchParams.get("notificacion_pendiente");
   const sortByRaw = searchParams.get("sort_by") || "created_at";
   const sortBy = VALID_SORT_COLUMNS.has(sortByRaw) ? sortByRaw : "created_at";
   const sortDir = searchParams.get("sort_dir") === "asc" ? true : false;
@@ -65,6 +67,13 @@ export async function GET(request: NextRequest) {
   if (fechaHasta) query = query.lte("fecha_resolucion", fechaHasta);
   if (fechaNotifDesde) query = query.gte("fecha_notificacion", fechaNotifDesde);
   if (fechaNotifHasta) query = query.lte("fecha_notificacion", fechaNotifHasta);
+  // notificacion_pendiente=true → solo pendientes de notificar (con resolución, sin notificar)
+  // notificacion_pendiente=false → excluye pendientes (listo para Fase 2 del reporte general)
+  if (notifPendiente === "true") {
+    query = query.not("fecha_resolucion", "is", null).is("fecha_notificacion", null);
+  } else if (notifPendiente === "false") {
+    query = query.not("fecha_notificacion", "is", null);
+  }
   if (busqueda) {
     const trimmed = busqueda.trim();
     const escaped = escapeIlike(trimmed);

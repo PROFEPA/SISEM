@@ -20,6 +20,7 @@ import {
   Home,
   PenLine,
   Shield,
+  BellRing,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/expedientes", label: "Expedientes", icon: FileText },
+  { href: "/expedientes/pendientes-notificacion", label: "Pendientes de notificar", icon: BellRing },
   { href: "/captura", label: "Capturar Expediente", icon: PenLine, roles: ["admin", "capturador"] },
   { href: "/importar", label: "Importar Excel", icon: Upload, roles: ["admin", "capturador"] },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users, roles: ["admin"] },
@@ -61,6 +63,7 @@ const ROLE_LABELS: Record<string, string> = {
 const BREADCRUMB_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   expedientes: "Expedientes",
+  "pendientes-notificacion": "Pendientes de notificar",
   captura: "Capturar Expediente",
   importar: "Importar Excel",
   admin: "Administración",
@@ -159,9 +162,15 @@ export default function DashboardLayout({
         {/* Navigation */}
         <nav className={`flex-1 ${isCollapsed ? 'px-2' : 'px-3'} py-4 space-y-1 overflow-y-auto`}>
           {filteredNav.map((item) => {
+            // "/expedientes" no debe activarse en la subruta de pendientes (que es su
+            // propio item de menú); para esa entrada se usa match por prefijo normal.
             const isActive =
               item.href === "/dashboard"
                 ? pathname === "/dashboard"
+                : item.href === "/expedientes"
+                ? pathname === "/expedientes" ||
+                  (pathname.startsWith("/expedientes/") &&
+                    !pathname.startsWith("/expedientes/pendientes-notificacion"))
                 : pathname.startsWith(item.href);
             return (
               <Link
