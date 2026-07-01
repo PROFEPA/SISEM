@@ -51,14 +51,6 @@ function formatDate(date: string | null): string {
   });
 }
 
-// Días naturales transcurridos desde la fecha de resolución hasta hoy
-function diasDesde(date: string | null): number | null {
-  if (!date) return null;
-  const inicio = new Date(date + "T00:00:00").getTime();
-  const hoy = new Date(new Date().toDateString()).getTime();
-  return Math.max(0, Math.round((hoy - inicio) / 86_400_000));
-}
-
 const PAGE_SIZE = 25;
 
 export default function PendientesNotificacionPage() {
@@ -78,7 +70,7 @@ export default function PendientesNotificacionPage() {
     setLoading(true);
     const baseParams = () => {
       const p = new URLSearchParams({
-        notificacion_pendiente: "true",
+        excluida_estadisticas: "true",
         pageSize: "100",
         sort_by: "fecha_resolucion",
         sort_dir: "asc",
@@ -144,10 +136,11 @@ export default function PendientesNotificacionPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <BellRing className="w-6 h-6 text-amber-500" />
-            Pendientes de notificar
+            Pendientes (excluidas de estadísticas)
           </h1>
           <p className="text-muted-foreground text-sm">
-            Multas con resolución que aún no se han notificado al infractor.
+            Expedientes marcados manualmente por el cliente: tienen seguimiento propio pero
+            no cuentan en el dashboard ni en los reportes generales.
           </p>
         </div>
         <div className="flex gap-2">
@@ -218,7 +211,7 @@ export default function PendientesNotificacionPage() {
                   <TableHead>Infractor</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
                   <TableHead>F. Resolución</TableHead>
-                  <TableHead className="text-center">Días sin notificar</TableHead>
+                  <TableHead>F. Notificación</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -236,58 +229,48 @@ export default function PendientesNotificacionPage() {
                 ) : visibles.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                      No hay multas pendientes de notificar.
+                      No hay expedientes excluidos de estadísticas.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  visibles.map((exp) => {
-                    const dias = diasDesde(exp.fecha_resolucion);
-                    const urgente = dias !== null && dias >= 30;
-                    const medio = dias !== null && dias >= 15 && dias < 30;
-                    return (
-                      <TableRow key={exp.id} className="hover:bg-muted/50">
-                        <TableCell className="font-mono text-xs">
-                          {exp.numero_expediente}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {exp.orpa?.nombre || "—"}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {exp.materia || "—"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs max-w-[200px] truncate">
-                          {exp.razon_social ||
-                            [exp.nombre_infractor, exp.apellido_paterno, exp.apellido_materno]
-                              .filter((x) => x && x !== "SIN DATO")
-                              .join(" ") ||
-                            "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs">
-                          {formatMoney(exp.monto_multa)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {formatDate(exp.fecha_resolucion)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge
-                            variant={urgente ? "destructive" : "secondary"}
-                            className={`text-[10px] ${medio ? "bg-amber-500 text-white" : ""}`}
-                          >
-                            {dias === null ? "—" : `${dias} días`}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Link href={`/expedientes/${exp.id}/editar`} title="Registrar notificación">
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <PenLine className="w-3.5 h-3.5" />
-                            </Button>
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                  visibles.map((exp) => (
+                    <TableRow key={exp.id} className="hover:bg-muted/50">
+                      <TableCell className="font-mono text-xs">
+                        {exp.numero_expediente}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {exp.orpa?.nombre || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {exp.materia || "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[200px] truncate">
+                        {exp.razon_social ||
+                          [exp.nombre_infractor, exp.apellido_paterno, exp.apellido_materno]
+                            .filter((x) => x && x !== "SIN DATO")
+                            .join(" ") ||
+                          "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {formatMoney(exp.monto_multa)}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {formatDate(exp.fecha_resolucion)}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {formatDate(exp.fecha_notificacion)}
+                      </TableCell>
+                      <TableCell>
+                        <Link href={`/expedientes/${exp.id}/editar`} title="Editar expediente">
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <PenLine className="w-3.5 h-3.5" />
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>

@@ -45,6 +45,7 @@ Esquema completo en `supabase/migrations/` (ver orden en README).
 ## Importación de Excel — flujo y gotchas
 
 Dos rutas en la app:
+
 - `POST /api/importar` → listado de expedientes individuales
   (`src/lib/excel/parser.ts`, función `parseExcelBuffer`).
 - `POST /api/importar/concentrado` → totales por ORPA (CIFRAS) →
@@ -72,45 +73,102 @@ const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: tru
 Con `raw: false` las fechas salen como string en formato **MM/DD/YY** (americano):
 no usar para parsear fechas.
 
+### ⚠️ Gotcha: fechas de calendario imposibles no basta con validar el año
+
+Validar que el ISO caiga en un rango de años razonable (`2019-01-01`..`2027-12-31`)
+**no detecta mes/día inválidos** (ej. una celda capturada como texto "05/15/26" con
+mes=15). Si se construye el ISO sin validar, Postgres truena al insertar: `date/time
+field value out of range`. Los parsers ya validan reconstruyendo la fecha con
+`new Date(Date.UTC(y, m-1, d))` y comparando que `getUTCFullYear/Month/Date` regresen
+los mismos valores — si no calienta, se descarta como `null` en vez de tronar el lote
+completo.
+
 ## Scripts de datos (`scripts/`)
 
 Scripts standalone de Node (`.mjs`), fuera del flujo de la app. Usan la
 **service role key** para saltarse RLS. Ejecutar desde `sisem/`:
 
 | Script | Propósito | Efecto |
-|--------|-----------|--------|
-| `validate-mayo.mjs`  | Diagnóstico de calidad del Excel (conteos, ORPAs, fechas, montos). | Solo lectura |
-| `import-mayo.mjs`    | UPSERT de la hoja `29062026` a `expedientes` (lotes de 100). | **Escribe en BD** |
-| `reconcile-mayo.mjs` | Compara fila por fila Excel ↔ BD y reporta discrepancias. | Solo lectura |
+| --- | --- | --- |
+| `validate-mayo.mjs` | Diagnóstico de calidad de `Concentrado Multas mayo.xlsx`. | Solo lectura |
+| `import-mayo.mjs` | UPSERT de la hoja `29062026` del concentrado a `expedientes`. | **Escribe en BD** |
+| `reconcile-mayo.mjs` | Compara fila por fila concentrado ↔ BD y reporta discrepancias. | Solo lectura |
+| `validate-pendientes-mayo.mjs` | Diagnóstico de `Pendientes Multas mayo.xlsx` (cuántos coincidirán/serán nuevos). | Solo lectura |
+| `import-pendientes-mayo.mjs` | Marca `excluida_estadisticas=true` en coincidencias; inserta las que no existen. Respalda antes de escribir en `scripts/backups/`. | **Escribe en BD** |
 
 ```bash
-node scripts/validate-mayo.mjs    # validar antes de importar
-node scripts/import-mayo.mjs      # importar (UPSERT)
-node scripts/reconcile-mayo.mjs   # verificar tras importar
+node scripts/validate-mayo.mjs              # validar el concentrado antes de importar
+node scripts/import-mayo.mjs                # importar concentrado (UPSERT)
+node scripts/reconcile-mayo.mjs             # verificar concentrado tras importar
+node scripts/validate-pendientes-mayo.mjs   # validar el Excel de pendientes
+node scripts/import-pendientes-mayo.mjs     # marcar/insertar pendientes (con respaldo)
 ```
 
-Los tres replican la misma lógica de parseo y la misma asignación secuencial de
-`numero_registro` que `src/app/api/importar/route.ts`. Si cambias el parser de la
-app, mantén estos scripts en sincronía (o refactoriza para compartir el módulo).
+Todos replican la misma lógica de parseo (ORPA, fechas, montos, materia, impugnación)
+y la misma asignación secuencial de `numero_registro` que `src/app/api/importar/route.ts`.
+Si cambias el parser de la app, mantenlos en sincronía (o refactoriza para compartir
+el módulo). `scripts/backups/` no se sube a git (contiene datos de expedientes).
+
+### Migraciones: el historial del CLI está desincronizado
+
+`supabase migration list --linked` muestra solo la primera migración
+(`20241001000000`) como aplicada en `remote`; las demás se corrieron manualmente por
+el SQL Editor (como indica el README) y el CLI no se enteró. **No usar `supabase db
+push`** a ciegas — reintentaría las ~9 migraciones viejas y podría fallar o duplicar
+políticas. Para aplicar una migración nueva de forma aislada:
+
+```bash
+npx supabase db query --linked -f "supabase/migrations/<archivo>.sql"
+```
+
+Esto ejecuta el SQL directo contra el proyecto vinculado sin tocar el historial de
+migraciones de las demás.
+
+## Bandera `excluida_estadisticas` — multas fuera del reporte general
+
+Columna en `expedientes` (migración `20260701000000_excluida_estadisticas.sql`,
+`BOOLEAN NOT NULL DEFAULT FALSE`). Es una **lista curada por el cliente** de qué
+expedientes no deben contarse en el dashboard/totales por ORPA/lista principal,
+aunque sí tienen seguimiento propio en `/expedientes/pendientes-notificacion`.
+
+**No es derivable de otras columnas** — no confundir con "sin `fecha_notificacion`":
+al validar contra el Excel de pendientes, solo 59 de 72 expedientes con
+`fecha_notificacion IS NULL` coincidían con la lista real del cliente, y varios
+expedientes ya notificados/pagados igual estaban en su lista. Se abandonó el criterio
+automático por fecha en favor de esta bandera explícita.
+
+Filtro en la API: `GET /api/expedientes?excluida_estadisticas=true|false`
+(`src/app/api/expedientes/route.ts`). El dashboard y los totales por ORPA **todavía
+no excluyen** estos registros (Fase 2, pendiente de confirmación del cliente) — solo
+se marcan y se muestran en su apartado.
+
+Emparejamiento Excel↔BD al importar pendientes: por `(numero_expediente,
+monto_multa≈$0.5)`, **no** por `numero_registro` secuencial (no es confiable entre
+archivos generados por separado). Si el monto no coincide para el mismo número de
+expediente, se trata como una persona/multa distinta (nuevo `numero_registro`).
 
 ---
 
-## Estado actual de los datos (2026-06-30)
+## Estado actual de los datos (2026-07-01)
 
-Tras importar `Concentrado Multas mayo.xlsx` (hoja `29062026`):
+**Concentrado de mayo** (`Concentrado Multas mayo.xlsx`, hoja `29062026`):
+- 4,104 expedientes importados al 100%, 0 discrepancias.
+- 4,692 registros totales en `expedientes` tras esa importación; los 588 de más
+  vienen de una carga previa (2026-05-18) ajena al concentrado de mayo (detalle
+  histórico, ver commits).
 
-- **4,104** expedientes del Excel → importados al 100%, **0 discrepancias**
-  (verificado campo por campo con `reconcile-mayo.mjs`: monto, fechas, pago,
-  impugnación, cobro, ORPA).
-- **4,692** registros totales en `expedientes`. Los **588** restantes provienen de
-  una importación previa (2026-05-18, `fuente="excel"`) y **no** están en el
-  concentrado de mayo:
-  - 583 son expedientes con número distinto (sobre todo **Tamaulipas** —100, ausente
-    del concentrado de mayo—, **BCS** 217, **Chihuahua** 140).
-  - 5 son `registro 2` de expedientes que en mayo aparecen una sola vez.
-- Por UPSERT, esos 588 **se conservan** (no se borra lo que no viene en el Excel).
-  Si el cliente quiere que el sistema refleje **solo** el concentrado de mayo, hace
-  falta una limpieza explícita **con respaldo previo** (no ejecutar sin confirmación).
+**Pendientes de mayo** (`Pendientes Multas mayo.xlsx`, hoja `29062026`, 263 filas):
+- 65 filas coincidían con expedientes ya existentes → solo se marcó la bandera.
+- 198 filas eran nuevas → se insertaron completas con la bandera activada.
+- **4,890** registros totales en `expedientes` ahora; **263** con
+  `excluida_estadisticas = true` (reconciliado 1:1 contra el Excel, 0 sin cobertura).
+- Observaciones para el cliente (no corregidas silenciosamente):
+  - `PFPAP/20.2/3S.2/00048-2025` — typo probable (`PFPAP` en vez de `PFPA`); se
+    importó tal cual como expediente nuevo, podría ser un duplicado mal capturado
+    de `PFPA/20.2/3S.2/00048-2025` (que ya existe con datos distintos).
+  - Fila 202 (`PFPA/24.2/2C.27.1/0006-23`) tenía `FECHA PAGO = "05/15/26"` — fecha
+    de calendario inválida (mes 15); se dejó como `null`, no se adivinó el valor.
 
 > Nota: la fecha más reciente de `fecha_resolucion` es de **junio 2026**; el nombre
 > del archivo ("mayo") es la fecha de compilación del reporte, no el rango de datos.
+

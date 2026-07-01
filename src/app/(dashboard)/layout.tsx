@@ -46,7 +46,7 @@ import { SectionErrorBoundary } from "@/components/section-error-boundary";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/expedientes", label: "Expedientes", icon: FileText },
-  { href: "/expedientes/pendientes-notificacion", label: "Pendientes de notificar", icon: BellRing },
+  { href: "/expedientes/pendientes-notificacion", label: "Pendientes", icon: BellRing },
   { href: "/captura", label: "Capturar Expediente", icon: PenLine, roles: ["admin", "capturador"] },
   { href: "/importar", label: "Importar Excel", icon: Upload, roles: ["admin", "capturador"] },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users, roles: ["admin"] },
@@ -63,7 +63,7 @@ const ROLE_LABELS: Record<string, string> = {
 const BREADCRUMB_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   expedientes: "Expedientes",
-  "pendientes-notificacion": "Pendientes de notificar",
+  "pendientes-notificacion": "Pendientes (excluidas de estadísticas)",
   captura: "Capturar Expediente",
   importar: "Importar Excel",
   admin: "Administración",

@@ -67,6 +67,10 @@ export interface IExpediente {
   oficio_cobro: string | null;
   documentacion_anexa: boolean;
   observaciones: string | null;
+  // Bandera curada manualmente por el cliente: la multa no debe contarse en el
+  // reporte general (dashboard, totales por ORPA, lista principal), aunque sí
+  // tiene seguimiento propio. No es derivable de otras columnas.
+  excluida_estadisticas: boolean;
   fuente: FuenteDatos;
   created_by: string | null;
   updated_by: string | null;
