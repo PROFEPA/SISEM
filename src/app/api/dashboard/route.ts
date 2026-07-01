@@ -63,6 +63,7 @@ export async function GET() {
       const { data: batch, error: batchError } = await supabase
         .from("expedientes")
         .select("id, numero_expediente, orpa_id, monto_multa, pagado, impugnado, tipo_impugnacion, fecha_resolucion, fecha_notificacion, fecha_pago, monto_pagado, fecha_impugnacion, materia, enviada_a_cobro, orpa:orpas(nombre, clave)")
+        .eq("excluida_estadisticas", false)
         .range(from, to);
 
       if (batchError) {

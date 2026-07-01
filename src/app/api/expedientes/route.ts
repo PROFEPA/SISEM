@@ -67,11 +67,9 @@ export async function GET(request: NextRequest) {
   if (fechaHasta) query = query.lte("fecha_resolucion", fechaHasta);
   if (fechaNotifDesde) query = query.gte("fecha_notificacion", fechaNotifDesde);
   if (fechaNotifHasta) query = query.lte("fecha_notificacion", fechaNotifHasta);
-  // excluida_estadisticas=true → solo las marcadas para el apartado de pendientes
-  // excluida_estadisticas=false → excluye las marcadas (listo para Fase 2 del reporte general)
-  if (excluidaEstadisticas === "true" || excluidaEstadisticas === "false") {
-    query = query.eq("excluida_estadisticas", excluidaEstadisticas === "true");
-  }
+  // excluida_estadisticas=true → solo las marcadas (apartado de pendientes)
+  // En cualquier otro caso (incluyendo sin parámetro) → lista general, sin las marcadas
+  query = query.eq("excluida_estadisticas", excluidaEstadisticas === "true");
   if (busqueda) {
     const trimmed = busqueda.trim();
     const escaped = escapeIlike(trimmed);

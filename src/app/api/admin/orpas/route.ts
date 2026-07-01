@@ -50,6 +50,7 @@ export async function GET() {
       const { data: batch } = await supabase
         .from("expedientes")
         .select("orpa_id, monto_multa, pagado, impugnado")
+        .eq("excluida_estadisticas", false)
         .range(from, from + batchSize - 1);
       if (!batch || batch.length === 0) break;
       allExpedientes = allExpedientes.concat(batch);

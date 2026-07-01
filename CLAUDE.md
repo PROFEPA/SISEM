@@ -137,10 +137,13 @@ al validar contra el Excel de pendientes, solo 59 de 72 expedientes con
 expedientes ya notificados/pagados igual estaban en su lista. Se abandonó el criterio
 automático por fecha en favor de esta bandera explícita.
 
-Filtro en la API: `GET /api/expedientes?excluida_estadisticas=true|false`
-(`src/app/api/expedientes/route.ts`). El dashboard y los totales por ORPA **todavía
-no excluyen** estos registros (Fase 2, pendiente de confirmación del cliente) — solo
-se marcan y se muestran en su apartado.
+**Fase 2 activa (2026-07-01):** el dashboard (`src/app/api/dashboard/route.ts`), los
+totales por ORPA (`src/app/api/admin/orpas/route.ts`) y la lista principal de
+expedientes (`src/app/api/expedientes/route.ts`, comportamiento por defecto) **ya
+excluyen** `excluida_estadisticas = true`. La lista general solo muestra `=false`
+salvo que se pida explícitamente `?excluida_estadisticas=true` (lo que hace
+`/expedientes/pendientes-notificacion`). No hay modo "ver todo mezclado" — si se
+necesita en el futuro, hay que agregarlo aparte.
 
 Emparejamiento Excel↔BD al importar pendientes: por `(numero_expediente,
 monto_multa≈$0.5)`, **no** por `numero_registro` secuencial (no es confiable entre
@@ -152,22 +155,39 @@ expediente, se trata como una persona/multa distinta (nuevo `numero_registro`).
 ## Estado actual de los datos (2026-07-01)
 
 **Concentrado de mayo** (`Concentrado Multas mayo.xlsx`, hoja `29062026`):
-- 4,104 expedientes importados al 100%, 0 discrepancias.
-- 4,692 registros totales en `expedientes` tras esa importación; los 588 de más
-  vienen de una carga previa (2026-05-18) ajena al concentrado de mayo (detalle
-  histórico, ver commits).
+4,104 expedientes importados al 100%, 0 discrepancias (verificado campo por campo).
 
 **Pendientes de mayo** (`Pendientes Multas mayo.xlsx`, hoja `29062026`, 263 filas):
-- 65 filas coincidían con expedientes ya existentes → solo se marcó la bandera.
-- 198 filas eran nuevas → se insertaron completas con la bandera activada.
-- **4,890** registros totales en `expedientes` ahora; **263** con
-  `excluida_estadisticas = true` (reconciliado 1:1 contra el Excel, 0 sin cobertura).
-- Observaciones para el cliente (no corregidas silenciosamente):
-  - `PFPAP/20.2/3S.2/00048-2025` — typo probable (`PFPAP` en vez de `PFPA`); se
-    importó tal cual como expediente nuevo, podría ser un duplicado mal capturado
-    de `PFPA/20.2/3S.2/00048-2025` (que ya existe con datos distintos).
-  - Fila 202 (`PFPA/24.2/2C.27.1/0006-23`) tenía `FECHA PAGO = "05/15/26"` — fecha
-    de calendario inválida (mes 15); se dejó como `null`, no se adivinó el valor.
+65 coincidían con expedientes ya existentes (solo se marcó la bandera); 198 eran
+nuevas (se insertaron completas con la bandera activada). Reconciliado 1:1 contra
+el Excel, 0 sin cobertura.
+
+**Limpieza de datos ajenos (2026-07-01):** el cliente notó que la plataforma mostraba
+4,890 expedientes cuando su Excel tenía 4,104. Se diagnosticó: 4,104 (concentrado) +
+263 (pendientes) + **527 registros de origen desconocido**, creados el 2026-05-18,
+**antes** de esta colaboración — no estaban en ningún Excel entregado. Se eliminaron
+con respaldo previo completo en `scripts/backups/` (`scripts/cleanup-huerfanos-mayo.mjs`).
+
+⚠️ **347 de esos 527 (66%) tenían documentos reales de SharePoint vinculados**
+(recibos de pago, 360 documentos = 13.5% de todo el sistema). `expediente_documentos`
+tiene `ON DELETE CASCADE`, así que esos vínculos se perdieron permanentemente al
+borrar (los PDFs siguen en la carpeta compartida, la plataforma ya no sabe a qué
+expediente pertenecían). **Se procedió con confirmación explícita del cliente**,
+informado de esta consecuencia antes de ejecutar. El respaldo JSON conserva
+`nombre_archivo` y `drive_file_id` de cada documento perdido por si se requiere
+re-vincular manualmente.
+
+**Total actual: 4,363** en `expedientes` (4,104 concentrado + 263 pendientes − 4 que
+se cuentan en ambos, casos donde el mismo expediente aparece en los dos Excel con
+igual monto — la lista de pendientes del cliente tiene prioridad). Con Fase 2 activa,
+el reporte general (dashboard/ORPA/lista) muestra **4,100** (no 4,104 exacto, por esos
+4 solapados) y el apartado de pendientes muestra **263**.
+
+Observaciones de calidad de datos reportadas al cliente (no corregidas silenciosamente):
+- `PFPAP/20.2/3S.2/00048-2025` — typo probable (`PFPAP` en vez de `PFPA`); podría ser
+  un duplicado mal capturado de `PFPA/20.2/3S.2/00048-2025` (datos distintos).
+- Una fila del Excel de pendientes tenía `FECHA PAGO = "05/15/26"` — fecha de
+  calendario inválida (mes 15); se dejó como `null`, no se adivinó el valor.
 
 > Nota: la fecha más reciente de `fecha_resolucion` es de **junio 2026**; el nombre
 > del archivo ("mayo") es la fecha de compilación del reporte, no el rango de datos.
