@@ -177,15 +177,24 @@ informado de esta consecuencia antes de ejecutar. El respaldo JSON conserva
 `nombre_archivo` y `drive_file_id` de cada documento perdido por si se requiere
 re-vincular manualmente.
 
-**Total actual: 4,363** en `expedientes` (4,104 concentrado + 263 pendientes − 4 que
-se cuentan en ambos, casos donde el mismo expediente aparece en los dos Excel con
-igual monto — la lista de pendientes del cliente tiene prioridad). Con Fase 2 activa,
-el reporte general (dashboard/ORPA/lista) muestra **4,100** (no 4,104 exacto, por esos
-4 solapados) y el apartado de pendientes muestra **263**.
+**Corrección del cliente (2026-07-01, mismo día):** tras revisar los 4 expedientes que
+aparecían en ambos Excel, el cliente actualizó los archivos en `Upload/` (mismo nombre,
+contenido corregido) y confirmó por correo:
+- 3 casos se restauran al reporte general (ya no están en `Pendientes Multas mayo.xlsx`).
+- El 4° (`PFPAP/20.2/3S.2/00048-2025`) eran **dos multas distintas legítimas**
+  (registro 1 y 2, montos $56,570 y $22,628); de paso corrigió el typo del concentrado
+  (`PFPAP` → `PFPA`). Ninguno de los dos sigue en pendientes.
+
+Aplicado con `scripts/sync-correcciones-mayo.mjs` (5 UPDATE puntuales por `id`, sin
+insertar ni borrar nada — respaldo previo en `scripts/backups/`): se corrigió el
+`numero_expediente` de esas 2 filas y se quitó `excluida_estadisticas` a las 4 que
+salieron de pendientes.
+
+**Total actual: 4,363** en `expedientes` (sin cambio). Con Fase 2 activa: reporte
+general (dashboard/ORPA/lista) = **4,104** (coincide exacto con el concentrado del
+cliente); apartado de pendientes = **259**.
 
 Observaciones de calidad de datos reportadas al cliente (no corregidas silenciosamente):
-- `PFPAP/20.2/3S.2/00048-2025` — typo probable (`PFPAP` en vez de `PFPA`); podría ser
-  un duplicado mal capturado de `PFPA/20.2/3S.2/00048-2025` (datos distintos).
 - Una fila del Excel de pendientes tenía `FECHA PAGO = "05/15/26"` — fecha de
   calendario inválida (mes 15); se dejó como `null`, no se adivinó el valor.
 
