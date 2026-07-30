@@ -22,6 +22,7 @@ import {
   Shield,
   ShieldCheck,
   BellRing,
+  Crown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -37,9 +38,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/ui/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageToggle } from "@/components/language-toggle";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { withBasePath } from "@/lib/api-base";
 import { DatePreservingLink } from "@/components/date-preserving-link";
@@ -312,12 +313,19 @@ export default function DashboardLayout({
             {profile && (
               <div className="flex items-center gap-2.5">
                 <ThemeToggle />
-                <LanguageToggle />
                 <NotificationBell
                   orpaId={profile.role === "admin" ? undefined : profile.orpa_id || undefined}
                 />
                 <div className="text-right">
-                  <p className="text-sm font-medium leading-tight">{profile.nombre_completo || "Usuario"}</p>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <p className="text-sm font-medium leading-tight">{profile.nombre_completo || "Usuario"}</p>
+                    {profile.id === SUPER_ADMIN_ID && (
+                      <Badge className="bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 hover:from-amber-400 hover:to-yellow-500 gap-1 font-semibold px-1.5 py-0 h-4 text-[10px]">
+                        <Crown className="w-2.5 h-2.5" />
+                        Super Admin
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-[11px] text-muted-foreground">{ROLE_LABELS[profile.role]}</p>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-[#1B8A5A] flex items-center justify-center text-xs font-bold text-white">
