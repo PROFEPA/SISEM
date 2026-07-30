@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import Image from "next/image";
 import { useTranslation } from "@/lib/i18n";
+import { withBasePath } from "@/lib/api-base";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -41,6 +42,12 @@ export default function LoginPage() {
       return;
     }
 
+    // Auditoría: registra el inicio de sesión (no bloquea el login si falla)
+    supabase.rpc("log_login", { p_user_agent: navigator.userAgent }).then(
+      () => {},
+      () => {}
+    );
+
     router.push("/dashboard");
     router.refresh();
   }
@@ -50,7 +57,7 @@ export default function LoginPage() {
       <CardHeader className="text-center space-y-4">
         <div className="mx-auto w-20 h-20 flex items-center justify-center">
           <Image
-            src="/logo.png"
+            src={withBasePath("/logo.png")}
             alt="SISEM"
             width={80}
             height={80}

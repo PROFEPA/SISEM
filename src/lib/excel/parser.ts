@@ -345,6 +345,21 @@ function normalizeMateria(val: unknown): string | null {
 // Función principal de parsing
 // ============================================================
 
+function findHeaderRow(rawData: unknown[][]): number {
+  for (let i = 0; i < Math.min(10, rawData.length); i++) {
+    const row = rawData[i];
+    if (!row) continue;
+    const nonNull = row.filter(
+      (c) => c !== null && c !== undefined && String(c).trim() !== ""
+    ).length;
+    const hasExpediente = row.some(
+      (c) => c && normalizeHeader(String(c)).includes("EXPEDIENTE")
+    );
+    if (nonNull >= 5 && hasExpediente) return i;
+  }
+  return -1;
+}
+
 export function parseExcelBuffer(buffer: ArrayBuffer, fileName?: string): ParseResult {
   const workbook = XLSX.read(buffer, {
     type: "array",
@@ -352,40 +367,57 @@ export function parseExcelBuffer(buffer: ArrayBuffer, fileName?: string): ParseR
     cellNF: false,
   });
 
-  // Find the main data sheet (skip Hoja2 which has validation lists)
+  // Seleccionar la hoja de datos. Algunos archivos traen primero una hoja
+  // "Catálogo" con las mismas cabeceras que la tabla real.
   let sheetName = workbook.SheetNames[0];
+  let rawData: unknown[][] = [];
+  let headerRowIdx = -1;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
   for (const name of workbook.SheetNames) {
     const lower = name.toLowerCase();
-    if (lower !== "hoja2" && !lower.includes("enero") && !lower.includes("febrero")) {
+    const candidateData: unknown[][] = XLSX.utils.sheet_to_json(
+      workbook.Sheets[name],
+      { header: 1, defval: null, raw: true }
+    );
+    const candidateHeader = findHeaderRow(candidateData);
+    if (candidateHeader === -1) continue;
+
+    const meaningfulRows = candidateData
+      .slice(candidateHeader + 1)
+      .filter(
+        (row) =>
+          row.filter(
+            (cell) =>
+              cell !== null && cell !== undefined && String(cell).trim() !== ""
+          ).length >= 3
+      ).length;
+    const auxiliary = /cat[aá]logo|validaci[oó]n|lista|hoja\s*2/.test(lower);
+    const preferredName = /hoja\s*1|datos|multas|expedientes/.test(lower);
+    const score =
+      (auxiliary ? -1_000_000 : 0) +
+      (preferredName ? 100_000 : 0) +
+      meaningfulRows;
+
+    if (score > bestScore) {
+      bestScore = score;
       sheetName = name;
-      break;
+      rawData = candidateData;
+      headerRowIdx = candidateHeader;
     }
   }
 
-  const sheet = workbook.Sheets[sheetName];
-  const rawData: unknown[][] = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    defval: null,
-    raw: true,
-  });
+  // Fallback para archivos sin una cabecera reconocible.
+  if (rawData.length === 0) {
+    rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      header: 1,
+      defval: null,
+      raw: true,
+    });
+  }
 
   if (rawData.length < 2) {
     return { valid: [], errors: [], totalRows: 0, sheetName };
-  }
-
-  // Find header row — look for a row with several non-null cells that contains "EXPEDIENTE"
-  let headerRowIdx = -1;
-  for (let i = 0; i < Math.min(10, rawData.length); i++) {
-    const row = rawData[i];
-    if (!row) continue;
-    const nonNull = row.filter((c) => c !== null && c !== undefined && String(c).trim() !== "").length;
-    const hasExpediente = row.some(
-      (c) => c && normalizeHeader(String(c)).includes("EXPEDIENTE")
-    );
-    if (nonNull >= 5 && hasExpediente) {
-      headerRowIdx = i;
-      break;
-    }
   }
 
   if (headerRowIdx === -1) {

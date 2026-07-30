@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { parseDateRange } from "@/lib/date-range";
 import {
   fechaLimiteNotificacion,
   fechaLimiteCobro,
@@ -22,7 +23,7 @@ const VALID_MATERIAS = new Set([
   "RECURSOS MARINOS",
 ]);
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
 
@@ -33,6 +34,19 @@ export async function GET() {
         { status: 401 }
       );
     }
+
+    const { searchParams } = new URL(request.url);
+    const parsedDateRange = parseDateRange(searchParams);
+    if (!parsedDateRange.success) {
+      return NextResponse.json(
+        { data: null, error: parsedDateRange.error },
+        { status: 400 }
+      );
+    }
+    const dateRange = parsedDateRange.data;
+    const hasCustomRange = Boolean(dateRange.from || dateRange.to);
+    const trendMinDate = dateRange.from || (hasCustomRange ? "0001-01-01" : MIN_DATE);
+    const trendMaxDate = dateRange.to || (hasCustomRange ? "9999-12-31" : MAX_DATE);
 
     // Supabase defaults to 1000 rows — fetch all in batches
     const PAGE_SIZE = 1000;
@@ -60,11 +74,15 @@ export async function GET() {
     while (true) {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
-      const { data: batch, error: batchError } = await supabase
+      let batchQuery = supabase
         .from("expedientes")
         .select("id, numero_expediente, orpa_id, monto_multa, pagado, impugnado, tipo_impugnacion, fecha_resolucion, fecha_notificacion, fecha_pago, monto_pagado, fecha_impugnacion, materia, enviada_a_cobro, orpa:orpas(nombre, clave)")
-        .eq("excluida_estadisticas", false)
-        .range(from, to);
+        .eq("excluida_estadisticas", false);
+
+      if (dateRange.from) batchQuery = batchQuery.gte("fecha_resolucion", dateRange.from);
+      if (dateRange.to) batchQuery = batchQuery.lte("fecha_resolucion", dateRange.to);
+
+      const { data: batch, error: batchError } = await batchQuery.range(from, to);
 
       if (batchError) {
         expError = batchError;
@@ -154,7 +172,7 @@ export async function GET() {
         // Monthly trend — only valid dates in range
         if (exp.fecha_resolucion) {
           const dateStr = exp.fecha_resolucion;
-          if (dateStr >= MIN_DATE && dateStr <= MAX_DATE) {
+          if (dateStr >= trendMinDate && dateStr <= trendMaxDate) {
             const month = dateStr.substring(0, 7);
             if (!monthlyMap.has(month)) {
               monthlyMap.set(month, { count: 0, monto: 0 });
@@ -175,8 +193,9 @@ export async function GET() {
 
         // v3: monthly breakdown — cobradas (by fecha_pago month)
         if (exp.pagado && exp.fecha_pago) {
-          const payMonth = exp.fecha_pago.substring(0, 7);
-          if (payMonth >= MIN_DATE.substring(0, 7)) {
+          const payDate = exp.fecha_pago;
+          const payMonth = payDate.substring(0, 7);
+          if (payDate >= trendMinDate && payDate <= trendMaxDate) {
             if (!monthlyBreakdown.has(payMonth)) {
               monthlyBreakdown.set(payMonth, { impuestas: 0, montoImpuesto: 0, cobradas: 0, montoCobrado: 0, impugnadas: 0 });
             }
@@ -188,8 +207,9 @@ export async function GET() {
 
         // v3: monthly breakdown — impugnadas (by fecha_impugnacion month or fecha_resolucion)
         if (exp.impugnado) {
-          const impMonth = (exp.fecha_impugnacion || exp.fecha_resolucion || "").substring(0, 7);
-          if (impMonth && impMonth >= MIN_DATE.substring(0, 7)) {
+          const impDate = exp.fecha_impugnacion || exp.fecha_resolucion || "";
+          const impMonth = impDate.substring(0, 7);
+          if (impMonth && impDate >= trendMinDate && impDate <= trendMaxDate) {
             if (!monthlyBreakdown.has(impMonth)) {
               monthlyBreakdown.set(impMonth, { impuestas: 0, montoImpuesto: 0, cobradas: 0, montoCobrado: 0, impugnadas: 0 });
             }
@@ -357,6 +377,10 @@ export async function GET() {
             total: pendientesPago.length,
             montoTotal: pendientesPago.reduce((s, p) => s + p.monto_multa, 0),
           },
+        },
+        periodo: {
+          fecha_desde: dateRange.from,
+          fecha_hasta: dateRange.to,
         },
       },
       error: null,

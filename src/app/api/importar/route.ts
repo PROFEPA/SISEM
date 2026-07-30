@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { parseExcelBuffer } from "@/lib/excel/parser";
+import {
+  assignPendingRegistroNumbers,
+  detectExpedienteImportKind,
+  findStalePendingIds,
+  type ExistingExpedienteMatch,
+} from "@/lib/excel/import-kind";
 import { NextRequest, NextResponse } from "next/server";
 import { checkPermission } from "@/lib/auth/permissions";
 
@@ -47,6 +53,8 @@ export async function POST(request: NextRequest) {
 
   // Detect CIFRAS concentrado files early to give a helpful error
   const fileNameUpper = file.name.toUpperCase();
+  const importKind = detectExpedienteImportKind(file.name);
+  const isPendingImport = importKind === "pendientes";
   if (fileNameUpper.includes("CIFRAS") || fileNameUpper.startsWith("1.")) {
     return NextResponse.json(
       {
@@ -65,7 +73,17 @@ export async function POST(request: NextRequest) {
   if (parseResult.valid.length === 0) {
     return NextResponse.json(
       {
-        data: { parsed: 0, errors: parseResult.errors.slice(0, 100) },
+        data: {
+          totalRows: parseResult.totalRows,
+          parsed: 0,
+          inserted: 0,
+          parseErrors: parseResult.errors.slice(0, 100),
+          importErrors: [],
+          sheetName: parseResult.sheetName,
+          importKind,
+          excludedFromStatistics: isPendingImport,
+          removedFromPending: 0,
+        },
         error: "No se encontraron registros válidos",
         message: null,
       },
@@ -158,25 +176,94 @@ export async function POST(request: NextRequest) {
       oficio_cobro: row.oficio_cobro,
       documentacion_anexa: row.documentacion_anexa,
       observaciones: row.observaciones,
+      ...(isPendingImport ? { excluida_estadisticas: true } : {}),
       fuente: "excel" as const,
       created_by: user.id,
       updated_by: user.id,
     });
   }
 
-  // Asignar numero_registro para expedientes con múltiples registros
-  // (mismo expediente, diferente persona/multa)
-  const registroCounters = new Map<string, number>();
-  for (const r of records) {
-    const current = (registroCounters.get(r.numero_expediente) ?? 0) + 1;
-    registroCounters.set(r.numero_expediente, current);
-    (r as Record<string, unknown>).numero_registro = current;
+  if (isPendingImport) {
+    // La lista de pendientes puede compartir expedientes con el concentrado
+    // general. Se empareja por número + monto (no por el orden de las filas),
+    // conservando numero_registro si ya existe y creando el siguiente solo
+    // para multas realmente nuevas.
+    const expedienteNumbers = [
+      ...new Set(records.map((record) => record.numero_expediente)),
+    ];
+    const existing: ExistingExpedienteMatch[] = [];
+    const LOOKUP_BATCH_SIZE = 100;
+
+    for (let i = 0; i < expedienteNumbers.length; i += LOOKUP_BATCH_SIZE) {
+      const numbers = expedienteNumbers.slice(i, i + LOOKUP_BATCH_SIZE);
+      const { data, error } = await supabase
+        .from("expedientes")
+        .select("id, numero_expediente, numero_registro, monto_multa")
+        .in("numero_expediente", numbers);
+
+      if (error) {
+        return NextResponse.json(
+          {
+            data: {
+              totalRows: parseResult.totalRows,
+              parsed: parseResult.valid.length,
+              inserted: 0,
+              parseErrors: parseResult.errors.slice(0, 100),
+              importErrors: [{ row: 0, error: error.message }],
+              sheetName: parseResult.sheetName,
+              importKind,
+              excludedFromStatistics: true,
+              removedFromPending: 0,
+            },
+            error: "No se pudo comparar la lista de pendientes con los expedientes existentes",
+            message: null,
+          },
+          { status: 500 }
+        );
+      }
+
+      existing.push(
+        ...(data ?? []).map((record) => ({
+          id: record.id,
+          numero_expediente: record.numero_expediente,
+          numero_registro: record.numero_registro,
+          monto_multa:
+            record.monto_multa == null ? null : Number(record.monto_multa),
+        }))
+      );
+    }
+
+    const registroNumbers = assignPendingRegistroNumbers(records, existing);
+    records.forEach((record, index) => {
+      (record as Record<string, unknown>).numero_registro =
+        registroNumbers[index];
+    });
+  } else {
+    // En el concentrado general, los múltiples responsables/multas del mismo
+    // expediente conservan el orden secuencial del archivo.
+    const registroCounters = new Map<string, number>();
+    for (const record of records) {
+      const current =
+        (registroCounters.get(record.numero_expediente) ?? 0) + 1;
+      registroCounters.set(record.numero_expediente, current);
+      (record as Record<string, unknown>).numero_registro = current;
+    }
   }
 
   if (records.length === 0) {
     return NextResponse.json(
       {
-        data: { parsed: 0, inserted: 0, errors: importErrors },
+        data: {
+          totalRows: parseResult.totalRows,
+          parsed: parseResult.valid.length,
+          inserted: 0,
+          parseErrors: parseResult.errors.slice(0, 100),
+          importErrors: importErrors.slice(0, 100),
+          sheetName: parseResult.sheetName,
+          importKind,
+          excludedFromStatistics: isPendingImport,
+          removedFromPending: 0,
+        },
         error: "No se pudieron mapear registros a ORPAs",
         message: null,
       },
@@ -187,6 +274,7 @@ export async function POST(request: NextRequest) {
   // Upsert in batches of 100
   const BATCH_SIZE = 100;
   let totalInserted = 0;
+  const importedIds = new Set<string>();
 
   for (let i = 0; i < records.length; i += BATCH_SIZE) {
     const batch = records.slice(i, i + BATCH_SIZE);
@@ -205,6 +293,64 @@ export async function POST(request: NextRequest) {
       });
     } else {
       totalInserted += inserted?.length || 0;
+      for (const record of inserted ?? []) importedIds.add(record.id);
+    }
+  }
+
+  // Un archivo de pendientes representa la lista curada vigente completa.
+  // Solo después de un UPSERT 100% exitoso se restauran a estadísticas los
+  // registros que estaban marcados antes pero ya no aparecen en el archivo.
+  // Así, un error parcial nunca desmarca pendientes válidos.
+  let removedFromPending = 0;
+  if (
+    isPendingImport &&
+    parseResult.errors.length === 0 &&
+    importErrors.length === 0 &&
+    totalInserted === records.length
+  ) {
+    const previouslyPendingIds: string[] = [];
+    const LOOKUP_PAGE_SIZE = 1000;
+
+    for (let from = 0; ; from += LOOKUP_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("expedientes")
+        .select("id")
+        .eq("excluida_estadisticas", true)
+        .order("id")
+        .range(from, from + LOOKUP_PAGE_SIZE - 1);
+
+      if (error) {
+        importErrors.push({
+          row: 0,
+          error: `No se pudo sincronizar la lista anterior de pendientes: ${error.message}`,
+        });
+        break;
+      }
+
+      previouslyPendingIds.push(...(data ?? []).map((record) => record.id));
+      if (!data || data.length < LOOKUP_PAGE_SIZE) break;
+    }
+
+    if (importErrors.length === 0) {
+      const staleIds = findStalePendingIds(previouslyPendingIds, importedIds);
+
+      for (let i = 0; i < staleIds.length; i += BATCH_SIZE) {
+        const batch = staleIds.slice(i, i + BATCH_SIZE);
+        const { data, error } = await supabase
+          .from("expedientes")
+          .update({ excluida_estadisticas: false, updated_by: user.id })
+          .in("id", batch)
+          .select("id");
+
+        if (error) {
+          importErrors.push({
+            row: 0,
+            error: `No se pudieron restaurar ${batch.length} expedientes a estadísticas: ${error.message}`,
+          });
+          break;
+        }
+        removedFromPending += data?.length ?? 0;
+      }
     }
   }
 
@@ -216,8 +362,13 @@ export async function POST(request: NextRequest) {
       parseErrors: parseResult.errors.slice(0, 100),
       importErrors: importErrors.slice(0, 100),
       sheetName: parseResult.sheetName,
+      importKind,
+      excludedFromStatistics: isPendingImport,
+      removedFromPending,
     },
     error: null,
-    message: `Se importaron ${totalInserted} expedientes de ${records.length} registros válidos`,
+    message: isPendingImport
+      ? `Se sincronizaron ${totalInserted} pendientes; ${removedFromPending} registros anteriores volvieron a estadísticas`
+      : `Se importaron ${totalInserted} expedientes de ${records.length} registros válidos`,
   });
 }

@@ -10,6 +10,7 @@
 
 "use client";
 
+import { API_BASE, withBasePath } from "@/lib/api-base";
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Bell, Volume2, VolumeOff } from "lucide-react";
@@ -63,14 +64,14 @@ function showBrowserNotification(title: string, body: string, url?: string) {
 
   const n = new Notification(title, {
     body,
-    icon: "/icon.png",
+    icon: withBasePath("/icon.png"),
     tag: "sisem-notification",
   });
 
   if (url) {
     n.onclick = () => {
       window.focus();
-      window.location.href = url;
+      window.location.href = withBasePath(url);
       n.close();
     };
   }
@@ -102,7 +103,7 @@ export function NotificationBell({ orpaId }: { orpaId?: string }) {
     try {
       const params = new URLSearchParams();
       if (orpaId) params.set("orpa_id", orpaId);
-      const res = await fetch(`/api/alertas?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/api/alertas?${params.toString()}`);
       const json = await res.json();
       if (json.data) {
         const newTotal =

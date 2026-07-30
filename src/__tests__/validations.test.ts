@@ -41,7 +41,9 @@ describe("expedienteCreateSchema", () => {
   });
 
   it("rejects missing numero_expediente", () => {
-    const { numero_expediente, ...rest } = validBase;
+    const rest = Object.fromEntries(
+      Object.entries(validBase).filter(([key]) => key !== "numero_expediente")
+    );
     const result = expedienteCreateSchema.safeParse(rest);
     expect(result.success).toBe(false);
   });

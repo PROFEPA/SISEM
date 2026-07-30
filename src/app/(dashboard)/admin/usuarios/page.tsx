@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { API_BASE } from "@/lib/api-base";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,8 +33,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Search, Pencil, Trash2, AlertTriangle } from "lucide-react";
-import type { IProfile, IOrpa, Role } from "@/types";
+import { Users, UserPlus, Search, Pencil, Trash2, AlertTriangle, Crown, Eye } from "lucide-react";
+import type { IProfile, IOrpa } from "@/types";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { stableSort, type SortDirection } from "@/lib/table-sort";
+
+type UserSortKey = "nombre" | "orpa" | "role" | "activo";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Administrador",
@@ -47,12 +52,17 @@ const ROLE_COLORS: Record<string, string> = {
   visualizador: "bg-muted text-muted-foreground hover:bg-muted",
 };
 
+// Super usuario protegido: no se puede eliminar ni degradar de rol/estado.
+import { SUPER_ADMIN_ID } from "@/lib/auth/super-admin";
+
 export default function UsuariosPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [profiles, setProfiles] = useState<IProfile[]>([]);
   const [orpas, setOrpas] = useState<IOrpa[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<UserSortKey>("nombre");
+  const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
   // Create user dialog
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,8 +95,10 @@ export default function UsuariosPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<IProfile | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [impersonating, setImpersonating] = useState<string | null>(null);
 
-  async function loadProfiles() {
+  const loadProfiles = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase
       .from("profiles")
@@ -94,20 +106,46 @@ export default function UsuariosPage() {
       .order("created_at", { ascending: false });
     if (data) setProfiles(data as IProfile[]);
     setLoading(false);
-  }
+  }, [supabase]);
 
-  async function loadOrpas() {
+  const loadOrpas = useCallback(async () => {
     const { data } = await supabase
       .from("orpas")
       .select("*")
       .order("clave");
     if (data) setOrpas(data as IOrpa[]);
-  }
+  }, [supabase]);
 
   useEffect(() => {
     loadProfiles();
     loadOrpas();
-  }, []);
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+  }, [loadOrpas, loadProfiles, supabase]);
+
+  // ── Impersonar (exclusivo del super usuario) ──
+  async function handleImpersonate(target: IProfile) {
+    const confirmed = window.confirm(
+      `Vas a iniciar sesión como "${target.nombre_completo}". Se abrirá en una pestaña nueva; usa una ventana de incógnito si ya tienes tu propia sesión abierta ahí. ¿Continuar?`
+    );
+    if (!confirmed) return;
+
+    setImpersonating(target.id);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/impersonar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_user_id: target.id }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        alert(json.error);
+        return;
+      }
+      window.open(json.data.action_link, "_blank");
+    } finally {
+      setImpersonating(null);
+    }
+  }
 
   // ── Create User ──
   async function handleCreateUser(e: React.FormEvent) {
@@ -118,7 +156,7 @@ export default function UsuariosPage() {
     const normalizedOrpaId =
       form.orpa_id && form.orpa_id !== "none" ? form.orpa_id : null;
 
-    const res = await fetch("/api/admin/usuarios", {
+    const res = await fetch(`${API_BASE}/api/admin/usuarios`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -150,7 +188,6 @@ export default function UsuariosPage() {
 
   // ── Edit User ──
   function openEdit(p: IProfile) {
-    const orpa = p.orpa as unknown as { nombre: string; clave: string } | null;
     setEditForm({
       user_id: p.id,
       nombre_completo: p.nombre_completo || "",
@@ -171,7 +208,7 @@ export default function UsuariosPage() {
     const normalizedOrpaId =
       editForm.orpa_id && editForm.orpa_id !== "none" ? editForm.orpa_id : null;
 
-    const res = await fetch("/api/admin/usuarios", {
+    const res = await fetch(`${API_BASE}/api/admin/usuarios`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -208,7 +245,7 @@ export default function UsuariosPage() {
     setDeleting(true);
     setDeleteError(null);
 
-    const res = await fetch(`/api/admin/usuarios?user_id=${deleteTarget.id}`, {
+    const res = await fetch(`${API_BASE}/api/admin/usuarios?user_id=${deleteTarget.id}`, {
       method: "DELETE",
     });
 
@@ -225,17 +262,37 @@ export default function UsuariosPage() {
     loadProfiles();
   }
 
-  const filtered = profiles.filter((p) => {
-    if (!search) return true;
+  function toggleSort(field: string, defaultDirection: SortDirection = "asc") {
+    const nextField = field as UserSortKey;
+    if (sortBy === nextField) {
+      setSortDir((current) => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(nextField);
+      setSortDir(defaultDirection);
+    }
+  }
+
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const orpa = p.orpa as unknown as { nombre: string; clave: string } | null;
-    return (
-      (p.nombre_completo || "").toLowerCase().includes(q) ||
-      (orpa?.nombre || "").toLowerCase().includes(q) ||
-      (orpa?.clave || "").toLowerCase().includes(q) ||
-      p.role.toLowerCase().includes(q)
-    );
-  });
+    const matches = profiles.filter((profile) => {
+      if (!q) return true;
+      const orpa = profile.orpa as unknown as { nombre: string; clave: string } | null;
+      return (
+        (profile.nombre_completo || "").toLowerCase().includes(q) ||
+        (orpa?.nombre || "").toLowerCase().includes(q) ||
+        (orpa?.clave || "").toLowerCase().includes(q) ||
+        profile.role.toLowerCase().includes(q)
+      );
+    });
+
+    return stableSort(matches, (profile) => {
+      const orpa = profile.orpa as unknown as { nombre: string; clave: string } | null;
+      if (sortBy === "nombre") return profile.nombre_completo;
+      if (sortBy === "orpa") return orpa ? `${orpa.clave} ${orpa.nombre}` : null;
+      if (sortBy === "role") return ROLE_LABELS[profile.role] || profile.role;
+      return profile.activo;
+    }, sortDir);
+  }, [profiles, search, sortBy, sortDir]);
 
   const stats = {
     total: profiles.length,
@@ -261,11 +318,9 @@ export default function UsuariosPage() {
 
         {/* ── Create User Dialog ── */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger render={<span />}>
-            <Button className="gap-2 cursor-pointer">
-              <UserPlus className="w-4 h-4" />
-              Crear Usuario
-            </Button>
+          <DialogTrigger render={<Button className="gap-2 cursor-pointer" />}>
+            <UserPlus className="w-4 h-4" />
+            Crear Usuario
           </DialogTrigger>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
@@ -407,10 +462,10 @@ export default function UsuariosPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>ORPA</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Estado</TableHead>
+                <SortableTableHead field="nombre" label="Nombre" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                <SortableTableHead field="orpa" label="ORPA" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                <SortableTableHead field="role" label="Rol" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                <SortableTableHead field="activo" label="Estado" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -452,9 +507,17 @@ export default function UsuariosPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={ROLE_COLORS[p.role] || ""}>
-                          {ROLE_LABELS[p.role] || p.role}
-                        </Badge>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge className={ROLE_COLORS[p.role] || ""}>
+                            {ROLE_LABELS[p.role] || p.role}
+                          </Badge>
+                          {p.id === SUPER_ADMIN_ID && (
+                            <Badge className="bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 hover:from-amber-400 hover:to-yellow-500 gap-1 font-semibold">
+                              <Crown className="w-3 h-3" />
+                              Super Admin
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -469,6 +532,18 @@ export default function UsuariosPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {currentUserId === SUPER_ADMIN_ID && p.id !== SUPER_ADMIN_ID && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 cursor-pointer text-amber-600 hover:text-amber-700 hover:bg-amber-50 disabled:opacity-30"
+                              title="Ver como (impersonar)"
+                              disabled={impersonating === p.id}
+                              onClick={() => handleImpersonate(p)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -481,8 +556,9 @@ export default function UsuariosPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 cursor-pointer text-red-500 hover:text-red-700 hover:bg-red-50"
-                            title="Eliminar usuario"
+                            className="h-8 w-8 cursor-pointer text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={p.id === SUPER_ADMIN_ID ? "Super usuario protegido: no se puede eliminar" : "Eliminar usuario"}
+                            disabled={p.id === SUPER_ADMIN_ID}
                             onClick={() => openDelete(p)}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -521,6 +597,7 @@ export default function UsuariosPage() {
                 <Label>Rol</Label>
                 <Select
                   value={editForm.role}
+                  disabled={editForm.user_id === SUPER_ADMIN_ID}
                   onValueChange={(v) => v && setEditForm({ ...editForm, role: v })}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -555,6 +632,7 @@ export default function UsuariosPage() {
               <Label>Estado</Label>
               <Select
                 value={editForm.activo ? "true" : "false"}
+                disabled={editForm.user_id === SUPER_ADMIN_ID}
                 onValueChange={(v) => setEditForm({ ...editForm, activo: v === "true" })}
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -563,6 +641,9 @@ export default function UsuariosPage() {
                   <SelectItem value="false">Inactivo</SelectItem>
                 </SelectContent>
               </Select>
+              {editForm.user_id === SUPER_ADMIN_ID && (
+                <p className="text-xs text-muted-foreground">Super usuario protegido: rol y estado no se pueden modificar.</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Nueva contraseña (opcional)</Label>

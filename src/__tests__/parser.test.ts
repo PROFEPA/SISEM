@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
+import * as XLSX from "xlsx";
 
 // We test the exported schema and the parseExcelBuffer via type checks
 // For the pure functions we need to extract them or test through the public API
-import { expedienteRowSchema } from "@/lib/excel/parser";
+import { expedienteRowSchema, parseExcelBuffer } from "@/lib/excel/parser";
 
 describe("expedienteRowSchema", () => {
   it("accepts a minimal valid row", () => {
@@ -87,5 +88,41 @@ describe("expedienteRowSchema", () => {
       numero_resolucion: "RES-001",
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("parseExcelBuffer", () => {
+  it("prefiere Hoja1 sobre una hoja Catálogo con cabeceras similares", () => {
+    const workbook = XLSX.utils.book_new();
+    const headers = [
+      "ORPAyGT",
+      "MATERIA",
+      "NO. EXPEDIENTE",
+      "FECHA DE RESOLUCIÓN",
+      "FECHA NOTIFICACIÓN",
+      "MULTA",
+      "MONTO MULTA",
+      "PAGADA",
+    ];
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([headers, ["Aguascalientes", "Forestal", null]]),
+      "Catálogo"
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        headers,
+        ["Puebla", "Forestal", "PFPA/TEST/001", 45924, "Pendiente", "Sí", 1000, "No"],
+      ]),
+      "Hoja1"
+    );
+
+    const buffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+    const result = parseExcelBuffer(buffer, "Multas Junio.xlsx");
+
+    expect(result.sheetName).toBe("Hoja1");
+    expect(result.valid).toHaveLength(1);
+    expect(result.valid[0].numero_expediente).toBe("PFPA/TEST/001");
   });
 });

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { API_BASE } from "@/lib/api-base";
+import { use, useEffect, useState, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -34,6 +35,32 @@ import {
 import type { IExpediente, IOrpa } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import * as XLSX from "xlsx";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { DateRangeFilter } from "@/components/date-range-filter";
+import { DatePreservingLink } from "@/components/date-preserving-link";
+import { formatDateRangeLabel } from "@/lib/date-range";
+import type { SortDirection } from "@/lib/table-sort";
+
+type ExpedienteSortKey =
+  | "created_at"
+  | "numero_expediente"
+  | "orpa"
+  | "materia"
+  | "monto_multa"
+  | "fecha_resolucion"
+  | "fecha_notificacion"
+  | "pagado"
+  | "impugnado"
+  | "enviada_a_cobro";
+
+type ExpedientesSearchParams = Promise<{
+  fecha_desde?: string | string[];
+  fecha_hasta?: string | string[];
+}>;
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
 
 function formatMoney(amount: number | null): string {
   if (amount === null || amount === undefined) return "—";
@@ -53,7 +80,12 @@ function formatDate(date: string | null): string {
   });
 }
 
-export default function ExpedientesPage() {
+export default function ExpedientesPage({ searchParams }: { searchParams: ExpedientesSearchParams }) {
+  const resolvedSearchParams = use(searchParams);
+  const urlFechaDesde = firstParam(resolvedSearchParams.fecha_desde);
+  const urlFechaHasta = firstParam(resolvedSearchParams.fecha_hasta);
+  const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
   const [expedientes, setExpedientes] = useState<IExpediente[]>([]);
   const [orpas, setOrpas] = useState<IOrpa[]>([]);
@@ -62,6 +94,8 @@ export default function ExpedientesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState<ExpedienteSortKey>("created_at");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
   // Filters
   const [busqueda, setBusqueda] = useState("");
@@ -74,12 +108,21 @@ export default function ExpedientesPage() {
   const [tipoPersona, setTipoPersona] = useState<string>("");
   const [fechaNotifDesde, setFechaNotifDesde] = useState<string>("");
   const [fechaNotifHasta, setFechaNotifHasta] = useState<string>("");
+  const [fechaDesde, setFechaDesde] = useState(urlFechaDesde);
+  const [fechaHasta, setFechaHasta] = useState(urlFechaHasta);
 
-  const fetchExpedientes = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    setFechaDesde(urlFechaDesde);
+    setFechaHasta(urlFechaHasta);
+    setPage(1);
+  }, [urlFechaDesde, urlFechaHasta]);
+
+  const buildQueryParams = useCallback((requestedPage: number, requestedPageSize: number) => {
     const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
+      page: String(requestedPage),
+      pageSize: String(requestedPageSize),
+      sort_by: sortBy,
+      sort_dir: sortDir,
     });
     if (busqueda) params.set("busqueda", busqueda);
     if (orpaId) params.set("orpa_id", orpaId);
@@ -89,15 +132,23 @@ export default function ExpedientesPage() {
     if (enviadaACobro) params.set("enviada_a_cobro", enviadaACobro);
     if (tipoImpugnacion) params.set("tipo_impugnacion", tipoImpugnacion);
     if (tipoPersona) params.set("tipo_persona", tipoPersona);
+    if (fechaDesde) params.set("fecha_desde", fechaDesde);
+    if (fechaHasta) params.set("fecha_hasta", fechaHasta);
     if (fechaNotifDesde) params.set("fecha_notificacion_desde", fechaNotifDesde);
     if (fechaNotifHasta) params.set("fecha_notificacion_hasta", fechaNotifHasta);
+    return params;
+  }, [busqueda, enviadaACobro, fechaDesde, fechaHasta, fechaNotifDesde, fechaNotifHasta, impugnado, materia, orpaId, pagado, sortBy, sortDir, tipoImpugnacion, tipoPersona]);
 
-    const res = await fetch(`/api/expedientes?${params.toString()}`);
+  const fetchExpedientes = useCallback(async () => {
+    setLoading(true);
+    const params = buildQueryParams(page, pageSize);
+
+    const res = await fetch(`${API_BASE}/api/expedientes?${params.toString()}`);
     const json = await res.json();
     setExpedientes(json.data || []);
     setTotal(json.total || 0);
     setLoading(false);
-  }, [page, pageSize, busqueda, orpaId, pagado, impugnado, materia, enviadaACobro, tipoImpugnacion, tipoPersona, fechaNotifDesde, fechaNotifHasta]);
+  }, [buildQueryParams, page, pageSize]);
 
   useEffect(() => {
     fetchExpedientes();
@@ -134,23 +185,55 @@ export default function ExpedientesPage() {
     setPage(1);
   }
 
-  async function exportToExcel() {
-    // Fetch all data with current filters (no pagination)
-    const params = new URLSearchParams({ page: "1", pageSize: "10000" });
-    if (busqueda) params.set("busqueda", busqueda);
-    if (orpaId) params.set("orpa_id", orpaId);
-    if (pagado) params.set("pagado", pagado);
-    if (impugnado) params.set("impugnado", impugnado);
-    if (materia) params.set("materia", materia);
-    if (enviadaACobro) params.set("enviada_a_cobro", enviadaACobro);
-    if (tipoImpugnacion) params.set("tipo_impugnacion", tipoImpugnacion);
-    if (tipoPersona) params.set("tipo_persona", tipoPersona);
-    if (fechaNotifDesde) params.set("fecha_notificacion_desde", fechaNotifDesde);
-    if (fechaNotifHasta) params.set("fecha_notificacion_hasta", fechaNotifHasta);
+  function updateDateRangeUrl(from: string, to: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (from) params.set("fecha_desde", from);
+    else params.delete("fecha_desde");
+    if (to) params.set("fecha_hasta", to);
+    else params.delete("fecha_hasta");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
-    const res = await fetch(`/api/expedientes?${params.toString()}`);
-    const json = await res.json();
-    const data = json.data || [];
+  function applyDateRange(from: string, to: string) {
+    setFechaDesde(from);
+    setFechaHasta(to);
+    setPage(1);
+    updateDateRangeUrl(from, to);
+  }
+
+  function clearDateRange() {
+    setFechaDesde("");
+    setFechaHasta("");
+    setPage(1);
+    updateDateRangeUrl("", "");
+  }
+
+  function toggleSort(field: string, defaultDirection: SortDirection = "asc") {
+    const nextField = field as ExpedienteSortKey;
+    if (sortBy === nextField) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(nextField);
+      setSortDir(defaultDirection);
+    }
+    setPage(1);
+  }
+
+  async function exportToExcel() {
+    const data: IExpediente[] = [];
+    let exportPage = 1;
+    let exportTotalPages = 1;
+    do {
+      const params = buildQueryParams(exportPage, 100);
+      const res = await fetch(`${API_BASE}/api/expedientes?${params.toString()}`);
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || "No se pudo exportar");
+      data.push(...(json.data || []));
+      exportTotalPages = json.totalPages || 1;
+      exportPage += 1;
+    } while (exportPage <= exportTotalPages);
+
     const rows = data.map((exp: IExpediente) => ({
       "No. Expediente": exp.numero_expediente,
       ORPA: exp.orpa?.nombre || "",
@@ -191,6 +274,7 @@ export default function ExpedientesPage() {
     const totalPagado = data.filter((e: IExpediente) => e.pagado).length;
     const totalImpugnado = data.filter((e: IExpediente) => e.impugnado).length;
     const summary = [
+      { Concepto: "Periodo", Valor: formatDateRangeLabel({ from: fechaDesde || null, to: fechaHasta || null }) },
       { Concepto: "Total Expedientes", Valor: data.length },
       { Concepto: "Monto Total", Valor: totalMonto },
       { Concepto: "Pagados", Valor: totalPagado },
@@ -204,7 +288,8 @@ export default function ExpedientesPage() {
     const wsSummary = XLSX.utils.json_to_sheet(summary);
     XLSX.utils.book_append_sheet(wb, wsSummary, "Resumen");
 
-    const filterTag = [materia, pagado === "true" ? "pagados" : pagado === "false" ? "nopagados" : ""].filter(Boolean).join("_");
+    const periodTag = fechaDesde && fechaHasta ? `${fechaDesde}_${fechaHasta}` : "";
+    const filterTag = [periodTag, materia, pagado === "true" ? "pagados" : pagado === "false" ? "nopagados" : ""].filter(Boolean).join("_");
     const fileName = `SISEM_Expedientes_${new Date().toISOString().split("T")[0]}${filterTag ? "_" + filterTag : ""}.xlsx`;
     XLSX.writeFile(wb, fileName);
   }
@@ -226,6 +311,21 @@ export default function ExpedientesPage() {
           Exportar Excel
         </Button>
       </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <DateRangeFilter
+            from={fechaDesde}
+            to={fechaHasta}
+            onApply={applyDateRange}
+            onClear={clearDateRange}
+            disabled={loading}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Periodo activo: {formatDateRangeLabel({ from: fechaDesde || null, to: fechaHasta || null })}
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Search and Filters */}
       <Card>
@@ -386,15 +486,15 @@ export default function ExpedientesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>No. Expediente</TableHead>
-                  <TableHead>ORPA</TableHead>
-                  <TableHead>Materia</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead>F. Resolución</TableHead>
-                  <TableHead>F. Notificación</TableHead>
-                  <TableHead>Pagado</TableHead>
-                  <TableHead>Impugnado</TableHead>
-                  <TableHead>Cobro</TableHead>
+                  <SortableTableHead field="numero_expediente" label="No. Expediente" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="orpa" label="ORPA" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="materia" label="Materia" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="monto_multa" label="Monto" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" />
+                  <SortableTableHead field="fecha_resolucion" label="F. Resolución" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
+                  <SortableTableHead field="fecha_notificacion" label="F. Notificación" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
+                  <SortableTableHead field="pagado" label="Pagado" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
+                  <SortableTableHead field="impugnado" label="Impugnado" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
+                  <SortableTableHead field="enviada_a_cobro" label="Cobro" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -463,11 +563,11 @@ export default function ExpedientesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Link href={`/expedientes/${exp.id}`}>
+                        <DatePreservingLink href={`/expedientes/${exp.id}`}>
                           <Button variant="ghost" size="icon" className="h-7 w-7">
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
-                        </Link>
+                        </DatePreservingLink>
                       </TableCell>
                     </TableRow>
                   ))

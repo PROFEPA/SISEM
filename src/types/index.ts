@@ -138,7 +138,23 @@ export interface IExpedienteFilters {
   tipo_impugnacion?: string;
   resultado_impugnacion?: string;
   tipo_persona?: TipoPersona;
+  sort_by?: ExpedienteSortField;
+  sort_dir?: "asc" | "desc";
 }
+
+export type ExpedienteSortField =
+  | "created_at"
+  | "updated_at"
+  | "numero_expediente"
+  | "nombre_infractor"
+  | "orpa"
+  | "materia"
+  | "monto_multa"
+  | "fecha_resolucion"
+  | "fecha_notificacion"
+  | "pagado"
+  | "impugnado"
+  | "enviada_a_cobro";
 
 // Catálogos de impugnación
 export interface ITipoImpugnacion {

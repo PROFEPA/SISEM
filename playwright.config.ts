@@ -2,8 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 import { config as dotenvConfig } from "dotenv";
 import path from "path";
 
-// Cargar credenciales de test desde .env.test.local
-dotenvConfig({ path: path.resolve(__dirname, ".env.test.local") });
+// Configuración local primero; las credenciales de prueba opcionales pueden
+// sobreescribirse desde .env.test.local o, preferentemente, desde el entorno.
+dotenvConfig({ path: path.resolve(__dirname, ".env.local") });
+dotenvConfig({ path: path.resolve(__dirname, ".env.test.local"), override: true });
+
+const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+const baseURL = externalBaseUrl ?? "http://localhost:3001";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,7 +20,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
 
   use: {
-    baseURL: "http://localhost:3001",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",
@@ -25,10 +30,14 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
 
-  webServer: {
-    command: "npm run dev -- --port 3001",
-    url: "http://localhost:3001",
-    reuseExistingServer: false,
-    timeout: 120_000,
-  },
+  ...(externalBaseUrl
+    ? {}
+    : {
+        webServer: {
+          command: "npm run dev -- --port 3001",
+          url: `${baseURL}${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}`,
+          reuseExistingServer: false,
+          timeout: 120_000,
+        },
+      }),
 });

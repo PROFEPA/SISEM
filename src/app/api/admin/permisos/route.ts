@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { invalidatePermissionsCache, type PermisosRol } from "@/lib/auth/permissions";
+import { SUPER_ADMIN_ID } from "@/lib/auth/super-admin";
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -42,9 +43,16 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
-    const { supabase, error: authError } = await requireAdmin();
+    const { supabase, user, error: authError } = await requireAdmin();
     if (authError) {
       return NextResponse.json({ error: authError }, { status: 403 });
+    }
+
+    if (user!.id !== SUPER_ADMIN_ID) {
+      return NextResponse.json(
+        { error: "Solo el super usuario puede editar los permisos por rol" },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();

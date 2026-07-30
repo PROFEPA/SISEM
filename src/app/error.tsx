@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useTranslation } from "@/lib/i18n";
+import { withBasePath } from "@/lib/api-base";
 
 export default function Error({
   error,
@@ -35,7 +36,7 @@ export default function Error({
         )}
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
-            onClick={() => window.location.href = "/dashboard"}
+            onClick={() => window.location.href = withBasePath("/dashboard")}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border text-foreground text-sm font-medium hover:bg-muted transition-colors cursor-pointer"
           >
             {t("errors.goHome")}

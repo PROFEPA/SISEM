@@ -1,5 +1,6 @@
 "use client";
 
+import { API_BASE } from "@/lib/api-base";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -26,7 +27,7 @@ import {
   XCircle,
   Download,
   ExternalLink,
-  Image,
+  Image as ImageIcon,
   File,
   FolderOpen,
 } from "lucide-react";
@@ -75,7 +76,7 @@ export default function ExpedienteDetallePage() {
   const [showAllHistorial, setShowAllHistorial] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/expedientes/${id}`)
+    fetch(`${API_BASE}/api/expedientes/${id}`)
       .then((r) => r.json())
       .then((res) => {
         if (res.data) setExpediente(res.data);
@@ -121,7 +122,7 @@ export default function ExpedienteDetallePage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a href={`/api/expedientes/${id}/pdf`} target="_blank" rel="noopener noreferrer">
+          <a href={`${API_BASE}/api/expedientes/${id}/pdf`} target="_blank" rel="noopener noreferrer">
             <Button size="sm" variant="outline">
               <Download className="w-4 h-4 mr-2" />
               PDF
@@ -417,7 +418,7 @@ export default function ExpedienteDetallePage() {
                               {isPdf ? (
                                 <FileText className="h-4 w-4 text-red-500 shrink-0" />
                               ) : isImage ? (
-                                <Image className="h-4 w-4 text-blue-500 shrink-0" />
+                                <ImageIcon className="h-4 w-4 text-blue-500 shrink-0" />
                               ) : (
                                 <File className="h-4 w-4 text-muted-foreground shrink-0" />
                               )}

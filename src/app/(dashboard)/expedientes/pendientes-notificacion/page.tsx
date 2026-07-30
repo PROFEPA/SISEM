@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { API_BASE } from "@/lib/api-base";
+import { use, useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +34,28 @@ import {
 } from "lucide-react";
 import type { IExpediente, IOrpa } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { DateRangeFilter } from "@/components/date-range-filter";
+import { formatDateRangeLabel } from "@/lib/date-range";
+import { stableSort, type SortDirection } from "@/lib/table-sort";
+
+type PendientesSearchParams = Promise<{
+  fecha_desde?: string | string[];
+  fecha_hasta?: string | string[];
+}>;
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
+
+type PendingSortKey =
+  | "numero_expediente"
+  | "orpa"
+  | "materia"
+  | "infractor"
+  | "monto_multa"
+  | "fecha_resolucion"
+  | "fecha_notificacion";
 
 function formatMoney(amount: number | null): string {
   if (amount === null || amount === undefined) return "—";
@@ -51,14 +75,33 @@ function formatDate(date: string | null): string {
   });
 }
 
+function getInfractor(exp: IExpediente): string {
+  return exp.razon_social ||
+    [exp.nombre_infractor, exp.apellido_paterno, exp.apellido_materno]
+      .filter((value) => value && value !== "SIN DATO")
+      .join(" ") ||
+    "";
+}
+
 const PAGE_SIZE = 25;
 
-export default function PendientesNotificacionPage() {
+export default function PendientesNotificacionPage({
+  searchParams,
+}: {
+  searchParams: PendientesSearchParams;
+}) {
+  const resolvedSearchParams = use(searchParams);
+  const fechaDesde = firstParam(resolvedSearchParams.fecha_desde);
+  const fechaHasta = firstParam(resolvedSearchParams.fecha_hasta);
+  const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
   const [todos, setTodos] = useState<IExpediente[]>([]);
   const [orpas, setOrpas] = useState<IOrpa[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<PendingSortKey>("fecha_resolucion");
+  const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
   // Filtros
   const [busqueda, setBusqueda] = useState("");
@@ -77,6 +120,8 @@ export default function PendientesNotificacionPage() {
       });
       if (busquedaAplicada) p.set("busqueda", busquedaAplicada);
       if (orpaId) p.set("orpa_id", orpaId);
+      if (fechaDesde) p.set("fecha_desde", fechaDesde);
+      if (fechaHasta) p.set("fecha_hasta", fechaHasta);
       return p;
     };
 
@@ -86,7 +131,7 @@ export default function PendientesNotificacionPage() {
     do {
       const p = baseParams();
       p.set("page", String(pageNum));
-      const res = await fetch(`/api/expedientes?${p.toString()}`);
+      const res = await fetch(`${API_BASE}/api/expedientes?${p.toString()}`);
       const json = await res.json();
       acc.push(...(json.data || []));
       totalPages = json.totalPages || 1;
@@ -96,7 +141,7 @@ export default function PendientesNotificacionPage() {
     setTodos(acc);
     setPage(1);
     setLoading(false);
-  }, [busquedaAplicada, orpaId]);
+  }, [busquedaAplicada, fechaDesde, fechaHasta, orpaId]);
 
   useEffect(() => {
     fetchPendientes();
@@ -124,10 +169,40 @@ export default function PendientesNotificacionPage() {
     setOrpaId("");
   }
 
+  function updateDateRangeUrl(from: string, to: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (from) params.set("fecha_desde", from);
+    else params.delete("fecha_desde");
+    if (to) params.set("fecha_hasta", to);
+    else params.delete("fecha_hasta");
+    const query = params.toString();
+    setPage(1);
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  function toggleSort(field: string, defaultDirection: SortDirection = "asc") {
+    const nextField = field as PendingSortKey;
+    if (sortBy === nextField) {
+      setSortDir((current) => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(nextField);
+      setSortDir(defaultDirection);
+    }
+    setPage(1);
+  }
+
+  const sorted = useMemo(() => stableSort(todos, (exp) => {
+    switch (sortBy) {
+      case "orpa": return exp.orpa?.nombre;
+      case "infractor": return getInfractor(exp);
+      default: return exp[sortBy];
+    }
+  }, sortDir), [sortBy, sortDir, todos]);
+
   const total = todos.length;
   const montoTotal = todos.reduce((s, e) => s + (e.monto_multa || 0), 0);
   const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
-  const visibles = todos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const visibles = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const hasActiveFilters = Boolean(busquedaAplicada || orpaId);
 
   return (
@@ -158,6 +233,24 @@ export default function PendientesNotificacionPage() {
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <DateRangeFilter
+            from={fechaDesde}
+            to={fechaHasta}
+            onApply={updateDateRangeUrl}
+            onClear={() => updateDateRangeUrl("", "")}
+            disabled={loading}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Periodo activo: {formatDateRangeLabel({
+              from: fechaDesde || null,
+              to: fechaHasta || null,
+            })}
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Búsqueda y filtro por ORPA */}
       <Card>
@@ -205,13 +298,13 @@ export default function PendientesNotificacionPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>No. Expediente</TableHead>
-                  <TableHead>ORPA</TableHead>
-                  <TableHead>Materia</TableHead>
-                  <TableHead>Infractor</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead>F. Resolución</TableHead>
-                  <TableHead>F. Notificación</TableHead>
+                  <SortableTableHead field="numero_expediente" label="No. Expediente" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="orpa" label="ORPA" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="materia" label="Materia" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="infractor" label="Infractor" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                  <SortableTableHead field="monto_multa" label="Monto" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" />
+                  <SortableTableHead field="fecha_resolucion" label="F. Resolución" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
+                  <SortableTableHead field="fecha_notificacion" label="F. Notificación" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" />
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -247,11 +340,7 @@ export default function PendientesNotificacionPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs max-w-[200px] truncate">
-                        {exp.razon_social ||
-                          [exp.nombre_infractor, exp.apellido_paterno, exp.apellido_materno]
-                            .filter((x) => x && x !== "SIN DATO")
-                            .join(" ") ||
-                          "—"}
+                        {getInfractor(exp) || "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs">
                         {formatMoney(exp.monto_multa)}

@@ -20,10 +20,9 @@ import {
   Home,
   PenLine,
   Shield,
+  ShieldCheck,
   BellRing,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +41,9 @@ import { NotificationBell } from "@/components/ui/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { SectionErrorBoundary } from "@/components/section-error-boundary";
+import { withBasePath } from "@/lib/api-base";
+import { DatePreservingLink } from "@/components/date-preserving-link";
+import { SUPER_ADMIN_ID } from "@/lib/auth/super-admin";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
@@ -52,6 +54,7 @@ const NAV_ITEMS = [
   { href: "/admin/usuarios", label: "Usuarios", icon: Users, roles: ["admin"] },
   { href: "/admin/orpas", label: "ORPAs", icon: Building2, roles: ["admin"] },
   { href: "/admin/permisos", label: "Permisos", icon: Shield, roles: ["admin"] },
+  { href: "/admin/auditoria", label: "Auditoría", icon: ShieldCheck, superAdminOnly: true },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -70,6 +73,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   usuarios: "Usuarios",
   orpas: "ORPAs",
   permisos: "Permisos",
+  auditoria: "Auditoría",
   editar: "Editar",
 };
 
@@ -122,6 +126,7 @@ export default function DashboardLayout({
   }
 
   const filteredNav = NAV_ITEMS.filter((item) => {
+    if (item.superAdminOnly) return profile?.id === SUPER_ADMIN_ID;
     if (!item.roles) return true;
     return profile && item.roles.includes(profile.role);
   });
@@ -143,7 +148,7 @@ export default function DashboardLayout({
         <div className={`${isCollapsed ? 'px-2' : 'px-5'} py-5 border-b border-white/10`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
             <Image
-              src="/logo.png"
+              src={withBasePath("/logo.png")}
               alt="SISEM"
               width={40}
               height={40}
@@ -172,8 +177,13 @@ export default function DashboardLayout({
                   (pathname.startsWith("/expedientes/") &&
                     !pathname.startsWith("/expedientes/pendientes-notificacion"))
                 : pathname.startsWith(item.href);
+            const ItemLink = item.href === "/dashboard" ||
+              item.href === "/expedientes" ||
+              item.href === "/expedientes/pendientes-notificacion"
+              ? DatePreservingLink
+              : Link;
             return (
-              <Link
+              <ItemLink
                 key={item.href}
                 href={item.href}
                 title={isCollapsed ? item.label : undefined}
@@ -186,7 +196,7 @@ export default function DashboardLayout({
               >
                 <item.icon className="w-[18px] h-[18px] shrink-0" />
                 {!isCollapsed && item.label}
-              </Link>
+              </ItemLink>
             );
           })}
         </nav>

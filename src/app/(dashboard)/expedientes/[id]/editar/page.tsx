@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { API_BASE } from "@/lib/api-base";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -17,8 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Save } from "lucide-react";
-import type { IExpediente, IOrpa } from "@/types";
-import { createClient } from "@/lib/supabase/client";
+import type { IExpediente } from "@/types";
 
 interface TipoImpugnacion {
   id: number;
@@ -37,9 +37,7 @@ interface ResultadoImpugnacion {
 export default function EditarExpedientePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const supabase = createClient();
   const [expediente, setExpediente] = useState<IExpediente | null>(null);
-  const [orpas, setOrpas] = useState<IOrpa[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,8 +70,11 @@ export default function EditarExpedientePage() {
   });
 
   // Resultados filtrados por tipo de impugnación seleccionado
-  const resultadosDisponibles: ResultadoImpugnacion[] =
-    tiposImpugnacion.find((t) => t.clave === form.tipo_impugnacion)?.resultados || [];
+  const resultadosDisponibles = useMemo<ResultadoImpugnacion[]>(
+    () =>
+      tiposImpugnacion.find((t) => t.clave === form.tipo_impugnacion)?.resultados || [],
+    [form.tipo_impugnacion, tiposImpugnacion]
+  );
 
   // Cobro habilitado: no impugnado, o resultado favorable a PROFEPA
   const cobroHabilitado = !form.impugnado || resultadosFavorable === true;
@@ -95,7 +96,7 @@ export default function EditarExpedientePage() {
   useEffect(() => {
     async function loadCatalogos() {
       try {
-        const res = await fetch("/api/catalogos/impugnacion");
+        const res = await fetch(`${API_BASE}/api/catalogos/impugnacion`);
         const json = await res.json();
         if (json.data) setTiposImpugnacion(json.data);
       } catch {
@@ -113,41 +114,39 @@ export default function EditarExpedientePage() {
   }, [resultadosDisponibles, form.resultado_impugnacion, updateResultadoFavorable]);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/expedientes/${id}`).then((r) => r.json()),
-      supabase.from("orpas").select("*").eq("activa", true).order("nombre"),
-    ]).then(([expRes, orpaRes]) => {
-      if (expRes.data) {
-        const exp = expRes.data as IExpediente;
-        setExpediente(exp);
-        setForm({
-          numero_expediente: exp.numero_expediente || "",
-          materia: exp.materia || "",
-          tipo_persona: exp.tipo_persona || "",
-          nombre_infractor: exp.nombre_infractor || "",
-          apellido_paterno: exp.apellido_paterno || "",
-          apellido_materno: exp.apellido_materno || "",
-          razon_social: exp.razon_social || "",
-          rfc_infractor: exp.rfc_infractor || "",
-          monto_multa: exp.monto_multa?.toString() || "",
-          fecha_resolucion: exp.fecha_resolucion || "",
-          fecha_notificacion: exp.fecha_notificacion || "",
-          pagado: exp.pagado || false,
-          fecha_pago: exp.fecha_pago || "",
-          monto_pagado: exp.monto_pagado?.toString() || "",
-          folio_pago: exp.folio_pago || "",
-          impugnado: exp.impugnado || false,
-          tipo_impugnacion: exp.tipo_impugnacion || "",
-          resultado_impugnacion: exp.resultado_impugnacion || "",
-          enviada_a_cobro: exp.enviada_a_cobro || false,
-          oficio_cobro: exp.oficio_cobro || "",
-          observaciones: exp.observaciones || "",
-        });
-      }
-      if (orpaRes.data) setOrpas(orpaRes.data);
-      setLoading(false);
-    });
-  }, [id, supabase]);
+    fetch(`${API_BASE}/api/expedientes/${id}`)
+      .then((r) => r.json())
+      .then((expRes) => {
+        if (expRes.data) {
+          const exp = expRes.data as IExpediente;
+          setExpediente(exp);
+          setForm({
+            numero_expediente: exp.numero_expediente || "",
+            materia: exp.materia || "",
+            tipo_persona: exp.tipo_persona || "",
+            nombre_infractor: exp.nombre_infractor || "",
+            apellido_paterno: exp.apellido_paterno || "",
+            apellido_materno: exp.apellido_materno || "",
+            razon_social: exp.razon_social || "",
+            rfc_infractor: exp.rfc_infractor || "",
+            monto_multa: exp.monto_multa?.toString() || "",
+            fecha_resolucion: exp.fecha_resolucion || "",
+            fecha_notificacion: exp.fecha_notificacion || "",
+            pagado: exp.pagado || false,
+            fecha_pago: exp.fecha_pago || "",
+            monto_pagado: exp.monto_pagado?.toString() || "",
+            folio_pago: exp.folio_pago || "",
+            impugnado: exp.impugnado || false,
+            tipo_impugnacion: exp.tipo_impugnacion || "",
+            resultado_impugnacion: exp.resultado_impugnacion || "",
+            enviada_a_cobro: exp.enviada_a_cobro || false,
+            oficio_cobro: exp.oficio_cobro || "",
+            observaciones: exp.observaciones || "",
+          });
+        }
+        setLoading(false);
+      });
+  }, [id]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -176,7 +175,7 @@ export default function EditarExpedientePage() {
       razon_social: form.tipo_persona === "fisica" ? "" : (form.razon_social || null),
     };
 
-    const res = await fetch(`/api/expedientes/${id}`, {
+    const res = await fetch(`${API_BASE}/api/expedientes/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

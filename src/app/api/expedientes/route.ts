@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { expedienteCreateSchema } from "@/lib/validations/expediente";
 import { checkPermission } from "@/lib/auth/permissions";
+import { parseDateRange } from "@/lib/date-range";
 
 function escapeIlike(str: string): string {
   return str.replace(/[%_\\]/g, (c) => `\\${c}`);
@@ -10,6 +11,7 @@ function escapeIlike(str: string): string {
 const VALID_SORT_COLUMNS = new Set([
   "created_at", "updated_at", "numero_expediente", "nombre_infractor",
   "monto_multa", "fecha_resolucion", "fecha_notificacion", "materia",
+  "pagado", "impugnado", "enviada_a_cobro", "orpa",
 ]);
 
 export async function GET(request: NextRequest) {
@@ -25,6 +27,14 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
 
+  const parsedDateRange = parseDateRange(searchParams);
+  if (!parsedDateRange.success) {
+    return NextResponse.json(
+      { data: null, error: parsedDateRange.error, message: null },
+      { status: 400 }
+    );
+  }
+
   const page = Math.max(1, parseInt(searchParams.get("page") || "1") || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "25") || 25));
   const orpaId = searchParams.get("orpa_id");
@@ -32,8 +42,8 @@ export async function GET(request: NextRequest) {
   const pagado = searchParams.get("pagado");
   const impugnado = searchParams.get("impugnado");
   const busqueda = searchParams.get("busqueda");
-  const fechaDesde = searchParams.get("fecha_desde");
-  const fechaHasta = searchParams.get("fecha_hasta");
+  const fechaDesde = parsedDateRange.data.from;
+  const fechaHasta = parsedDateRange.data.to;
   const materia = searchParams.get("materia");
   const enviadaACobro = searchParams.get("enviada_a_cobro");
   const tipoImpugnacion = searchParams.get("tipo_impugnacion");
@@ -43,13 +53,26 @@ export async function GET(request: NextRequest) {
   const fechaNotifHasta = searchParams.get("fecha_notificacion_hasta");
   // Bandera curada manualmente (lista del cliente), no derivada de fechas
   const excluidaEstadisticas = searchParams.get("excluida_estadisticas");
-  const sortByRaw = searchParams.get("sort_by") || "created_at";
-  const sortBy = VALID_SORT_COLUMNS.has(sortByRaw) ? sortByRaw : "created_at";
-  const sortDir = searchParams.get("sort_dir") === "asc" ? true : false;
+  const sortByParam = searchParams.get("sort_by");
+  if (sortByParam && !VALID_SORT_COLUMNS.has(sortByParam)) {
+    return NextResponse.json(
+      { data: null, error: `Campo de ordenamiento no permitido: ${sortByParam}`, message: null },
+      { status: 400 }
+    );
+  }
+  const sortDirParam = searchParams.get("sort_dir");
+  if (sortDirParam && sortDirParam !== "asc" && sortDirParam !== "desc") {
+    return NextResponse.json(
+      { data: null, error: "sort_dir debe ser asc o desc", message: null },
+      { status: 400 }
+    );
+  }
+  const sortBy = sortByParam || "created_at";
+  const sortAscending = sortDirParam === "asc";
 
   let query = supabase
     .from("expedientes")
-    .select("*, orpa:orpas(*), estatus:estatus_expediente(*)", { count: "exact" });
+    .select("*, orpa:orpas!inner(*), estatus:estatus_expediente(*)", { count: "exact" });
 
   if (orpaId) query = query.eq("orpa_id", orpaId);
   if (estatusId) query = query.eq("estatus_id", parseInt(estatusId));
@@ -93,8 +116,16 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const { data, error, count } = await query
-    .order(sortBy, { ascending: sortDir })
+  const orderedQuery = sortBy === "orpa"
+    ? query.order("nombre", {
+        referencedTable: "orpa",
+        ascending: sortAscending,
+        nullsFirst: false,
+      })
+    : query.order(sortBy, { ascending: sortAscending, nullsFirst: false });
+
+  const { data, error, count } = await orderedQuery
+    .order("id", { ascending: true })
     .range(from, to);
 
   if (error) {
@@ -156,4 +187,3 @@ export async function POST(request: NextRequest) {
     { status: 201 }
   );
 }
-

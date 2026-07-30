@@ -1,10 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { SUPER_ADMIN_ID } from "@/lib/auth/super-admin";
 
 const VALID_ROLES = ["admin", "capturador", "visualizador"];
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// SUPER_ADMIN_ID: no se puede eliminar ni degradar (protegido también en BD
+// por el trigger protect_super_admin_trigger, como respaldo).
 
 function normalizeOrpaId(orpaId?: string | null) {
   if (!orpaId) return null;
@@ -321,6 +325,16 @@ export async function PUT(request: Request) {
     );
   }
 
+  if (
+    user_id === SUPER_ADMIN_ID &&
+    ((role !== undefined && role !== "admin") || (activo !== undefined && !activo))
+  ) {
+    return NextResponse.json(
+      { data: null, error: "Este usuario es el super usuario del sistema: no se puede cambiar su rol ni desactivarlo" },
+      { status: 403 }
+    );
+  }
+
   const normalizedOrpaId = normalizeOrpaId(orpa_id);
 
   if (normalizedOrpaId && !UUID_PATTERN.test(normalizedOrpaId)) {
@@ -399,6 +413,14 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       { data: null, error: "No puedes eliminarte a ti mismo" },
       { status: 400 }
+    );
+  }
+
+  // Super usuario protegido: nunca se puede eliminar
+  if (userId === SUPER_ADMIN_ID) {
+    return NextResponse.json(
+      { data: null, error: "Este usuario es el super usuario del sistema y no se puede eliminar" },
+      { status: 403 }
     );
   }
 

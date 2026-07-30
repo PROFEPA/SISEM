@@ -1,12 +1,15 @@
 "use client";
 
+import { API_BASE } from "@/lib/api-base";
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Shield, Check, X, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { SUPER_ADMIN_ID } from "@/lib/auth/super-admin";
 
 interface PermisosRol {
   role: string;
@@ -52,11 +55,21 @@ export default function PermisosPage() {
   const [modified, setModified] = useState<Record<string, Partial<PermisosRol>>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    async function checkSuperAdmin() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsSuperAdmin(user?.id === SUPER_ADMIN_ID);
+    }
+    checkSuperAdmin();
+  }, []);
 
   async function loadPermisos() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/permisos");
+      const res = await fetch(`${API_BASE}/api/admin/permisos`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Error al cargar permisos");
@@ -78,8 +91,8 @@ export default function PermisosPage() {
   }, []);
 
   function togglePermiso(role: string, permiso: string, currentValue: boolean) {
-    // Don't allow editing admin permissions
-    if (role === "admin") return;
+    // Don't allow editing admin permissions, and only the super usuario can edit
+    if (role === "admin" || !isSuperAdmin) return;
 
     setModified((prev) => ({
       ...prev,
@@ -105,7 +118,7 @@ export default function PermisosPage() {
 
     setSaving(role);
     try {
-      const res = await fetch("/api/admin/permisos", {
+      const res = await fetch(`${API_BASE}/api/admin/permisos`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role, ...changes }),
@@ -164,6 +177,12 @@ export default function PermisosPage() {
         Configura qué acciones puede realizar cada rol. Los permisos de Administrador no se pueden modificar.
       </p>
 
+      {!isSuperAdmin && (
+        <p className="text-sm text-amber-700 bg-amber-50 dark:bg-amber-950/20 dark:text-amber-400 rounded-lg px-3 py-2">
+          Solo el super usuario del sistema puede editar los permisos por rol. Puedes consultarlos, pero no modificarlos.
+        </p>
+      )}
+
       <div className="grid gap-6">
         {permisos.length === 0 && (
           <Card>
@@ -190,7 +209,7 @@ export default function PermisosPage() {
                     <span className="text-xs text-muted-foreground">(todos los permisos, no editable)</span>
                   )}
                 </div>
-                {rolPermisos.role !== "admin" && hasChanges(rolPermisos.role) && (
+                {rolPermisos.role !== "admin" && hasChanges(rolPermisos.role) && isSuperAdmin && (
                   <Button
                     size="sm"
                     onClick={() => saveRole(rolPermisos.role)}
@@ -212,16 +231,17 @@ export default function PermisosPage() {
                   const effective = getEffectiveValue(rolPermisos.role, permiso, original);
                   const changed = isModified(rolPermisos.role, permiso, original);
                   const isAdmin = rolPermisos.role === "admin";
+                  const isDisabled = isAdmin || !isSuperAdmin;
 
                   return (
                     <button
                       key={permiso}
                       type="button"
                       onClick={() => togglePermiso(rolPermisos.role, permiso, effective)}
-                      disabled={isAdmin}
+                      disabled={isDisabled}
                       className={`
                         flex items-center gap-3 p-3 rounded-lg border text-left transition-colors
-                        ${isAdmin ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-muted/50"}
+                        ${isDisabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer hover:bg-muted/50"}
                         ${changed ? "ring-2 ring-blue-400 border-blue-400" : ""}
                         ${effective ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800" : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"}
                       `}

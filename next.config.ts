@@ -13,6 +13,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Publicado en apps.profepa.gob.mx/sisem via nginx (solo en este servidor)
+  basePath: process.env.NEXT_BASE_PATH || "",
+  // Permite generar una release paralela y activarla de forma atómica.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactCompiler: true,
   async headers() {
     return [

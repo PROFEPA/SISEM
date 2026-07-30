@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, useCallback } from "react";
-import Link from "next/link";
+import { API_BASE } from "@/lib/api-base";
+import { use, useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,14 +23,9 @@ import {
   AlertTriangle,
   Scale,
   RefreshCw,
-  ArrowUpDown,
-  ChevronUp,
-  ChevronDown,
   Bell,
   Eye,
-  Clock,
   Search,
-  Filter,
   X,
 } from "lucide-react";
 import {
@@ -49,6 +45,11 @@ import {
   Line,
   Legend,
 } from "recharts";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { DateRangeFilter } from "@/components/date-range-filter";
+import { DatePreservingLink } from "@/components/date-preserving-link";
+import { formatDateRangeLabel } from "@/lib/date-range";
+import { stableSort, type SortDirection } from "@/lib/table-sort";
 
 // ============================================================
 // Types
@@ -119,6 +120,10 @@ interface DashboardData {
       montoTotal: number;
     };
   };
+  periodo?: {
+    fecha_desde: string | null;
+    fecha_hasta: string | null;
+  };
 }
 
 interface PendienteRow {
@@ -136,7 +141,14 @@ interface PendienteRow {
 }
 
 type OrpaSortKey = "nombre" | "total" | "monto" | "pagados" | "impugnados" | "enviadosCobro" | "faltantesCobro" | "cobPct" | "faltPct";
-type SortDir = "asc" | "desc";
+type DashboardSearchParams = Promise<{
+  fecha_desde?: string | string[];
+  fecha_hasta?: string | string[];
+}>;
+
+function firstParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
 
 // ============================================================
 // Constants
@@ -337,68 +349,40 @@ function ChartCard({
   );
 }
 
-function SortableHead({
-  field,
-  label,
-  current,
-  dir,
-  onSort,
-  defaultDir = "asc",
-  align = "left",
-}: {
-  field: string;
-  label: string;
-  current: string;
-  dir: SortDir;
-  onSort: (field: string, defaultDir?: SortDir) => void;
-  defaultDir?: SortDir;
-  align?: "left" | "right";
-}) {
-  const active = current === field;
-  return (
-    <TableHead
-      className={`cursor-pointer select-none hover:bg-muted/50 transition-colors ${align === "right" ? "text-right" : ""}`}
-      onClick={() => onSort(field, defaultDir)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {active ? (
-          dir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-        ) : (
-          <ArrowUpDown className="w-3 h-3 opacity-30" />
-        )}
-      </span>
-    </TableHead>
-  );
-}
-
 // ============================================================
 // Main component
 // ============================================================
 
-export default function DashboardPage() {
+export default function DashboardPage({ searchParams }: { searchParams: DashboardSearchParams }) {
+  const resolvedSearchParams = use(searchParams);
+  const urlFechaDesde = firstParam(resolvedSearchParams.fecha_desde);
+  const urlFechaHasta = firstParam(resolvedSearchParams.fecha_hasta);
+  const router = useRouter();
+  const pathname = usePathname();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [sortKey, setSortKey] = useState<OrpaSortKey>("monto");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [pendLimit, setPendLimit] = useState({ notificacion: 30, cobro: 30, pago: 30 });
+  const [fechaDesde, setFechaDesde] = useState(urlFechaDesde);
+  const [fechaHasta, setFechaHasta] = useState(urlFechaHasta);
 
   // Pendientes: search, filter, sort state
   const [pendSearch, setPendSearch] = useState("");
   const [pendOrpaFilter, setPendOrpaFilter] = useState("");
   const [pendSemaforoFilter, setPendSemaforoFilter] = useState<"" | "rojo" | "amarillo" | "verde">("");
   const [pendSortField, setPendSortField] = useState<string>("dias_restantes");
-  const [pendSortDir, setPendSortDir] = useState<SortDir>("asc");
+  const [pendSortDir, setPendSortDir] = useState<SortDirection>("asc");
 
-  const togglePendSort = useCallback((field: string, defaultDir: SortDir = "asc") => {
+  const togglePendSort = useCallback((field: string, defaultDirection: SortDirection = "asc") => {
     setPendSortField(prev => {
       if (prev === field) {
         setPendSortDir(d => d === "asc" ? "desc" : "asc");
         return field;
       }
-      setPendSortDir(defaultDir);
+      setPendSortDir(defaultDirection);
       return field;
     });
   }, []);
@@ -427,14 +411,11 @@ export default function DashboardPage() {
     }
 
     // Sort
-    const dir = pendSortDir === "asc" ? 1 : -1;
-    result = [...result].sort((a, b) => {
-      const field = pendSortField as keyof PendienteRow;
-      const va = a[field];
-      const vb = b[field];
-      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
-      return String(va).localeCompare(String(vb)) * dir;
-    });
+    const semaforoPriority = { rojo: 3, amarillo: 2, verde: 1 } as const;
+    result = stableSort(result, (row) => {
+      if (pendSortField === "semaforo") return semaforoPriority[row.semaforo];
+      return row[pendSortField as keyof PendienteRow];
+    }, pendSortDir);
 
     return result;
   }, [pendSearch, pendOrpaFilter, pendSemaforoFilter, pendSortField, pendSortDir]);
@@ -452,12 +433,19 @@ export default function DashboardPage() {
     return Array.from(names).sort();
   }, [data?.pendientes]);
 
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
-      const r = await fetch("/api/dashboard");
+      const params = new URLSearchParams();
+      if (fechaDesde) params.set("fecha_desde", fechaDesde);
+      if (fechaHasta) params.set("fecha_hasta", fechaHasta);
+      const query = params.toString();
+      const r = await fetch(`${API_BASE}/api/dashboard${query ? `?${query}` : ""}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
       const res = await r.json();
-      if (res.data) setData(res.data);
+      if (res.data) {
+        setData(res.data);
+        setError(null);
+      }
       else if (res.error) setError(res.error);
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -466,11 +454,18 @@ export default function DashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, [fechaDesde, fechaHasta]);
 
   useEffect(() => {
+    setFechaDesde(urlFechaDesde);
+    setFechaHasta(urlFechaHasta);
+    setPendLimit({ notificacion: 30, cobro: 30, pago: 30 });
+  }, [urlFechaDesde, urlFechaHasta]);
+
+  useEffect(() => {
+    setLoading(true);
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   // Auto-refresh every 5 minutes
   useEffect(() => {
@@ -479,11 +474,33 @@ export default function DashboardPage() {
       fetchData();
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
   function handleRefresh() {
     setRefreshing(true);
     fetchData();
+  }
+
+  function updateDateRangeUrl(from: string, to: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (from) params.set("fecha_desde", from);
+    else params.delete("fecha_desde");
+    if (to) params.set("fecha_hasta", to);
+    else params.delete("fecha_hasta");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
+  function applyDateRange(from: string, to: string) {
+    setFechaDesde(from);
+    setFechaHasta(to);
+    updateDateRangeUrl(from, to);
+  }
+
+  function clearDateRange() {
+    setFechaDesde("");
+    setFechaHasta("");
+    updateDateRangeUrl("", "");
   }
 
   const pieData = data
@@ -497,42 +514,34 @@ export default function DashboardPage() {
 
   const totalStatus = pieData.reduce((acc, d) => acc + d.value, 0);
 
-  function toggleSort(key: OrpaSortKey) {
-    if (sortKey === key) {
+  function toggleSort(key: string, defaultDirection: SortDirection = "asc") {
+    const nextKey = key as OrpaSortKey;
+    if (sortKey === nextKey) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
-      setSortKey(key);
-      setSortDir("desc");
+      setSortKey(nextKey);
+      setSortDir(defaultDirection);
     }
   }
 
-  const sortedOrpas = data?.porOrpa ? [...data.porOrpa].sort((a, b) => {
-    let va: number | string;
-    let vb: number | string;
+  const sortedOrpas = data?.porOrpa ? stableSort(data.porOrpa, (orpa) => {
+    let value: number | string;
     if (sortKey === "cobPct") {
-      va = a.total > 0 ? a.pagados / a.total : 0;
-      vb = b.total > 0 ? b.pagados / b.total : 0;
+      value = orpa.total > 0 ? orpa.pagados / orpa.total : 0;
     } else if (sortKey === "faltPct") {
-      va = a.total > 0 ? a.faltantesCobro / a.total : 0;
-      vb = b.total > 0 ? b.faltantesCobro / b.total : 0;
+      value = orpa.total > 0 ? orpa.faltantesCobro / orpa.total : 0;
     } else if (sortKey === "nombre") {
-      va = a.nombre;
-      vb = b.nombre;
+      value = orpa.nombre;
     } else {
-      va = a[sortKey];
-      vb = b[sortKey];
+      value = orpa[sortKey];
     }
-    if (va < vb) return sortDir === "asc" ? -1 : 1;
-    if (va > vb) return sortDir === "asc" ? 1 : -1;
-    return 0;
-  }) : [];
+    return value;
+  }, sortDir) : [];
 
-  function SortIcon({ column }: { column: OrpaSortKey }) {
-    if (sortKey !== column) return <ArrowUpDown className="w-3 h-3 text-muted-foreground/50" />;
-    return sortDir === "asc"
-      ? <ChevronUp className="w-3 h-3 text-emerald-600" />
-      : <ChevronDown className="w-3 h-3 text-emerald-600" />;
-  }
+  const periodLabel = formatDateRangeLabel({
+    from: fechaDesde || null,
+    to: fechaHasta || null,
+  });
 
   return (
     <div className="space-y-6">
@@ -543,7 +552,7 @@ export default function DashboardPage() {
             Dashboard
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Panorama general de expedientes de multas — PROFEPA
+            Panorama general de expedientes de multas — {periodLabel}
           </p>
         </div>
         <button
@@ -558,6 +567,21 @@ export default function DashboardPage() {
           Actualizar
         </button>
       </div>
+
+      <Card className="border border-border/60 shadow-sm">
+        <CardContent className="p-4">
+          <DateRangeFilter
+            from={fechaDesde}
+            to={fechaHasta}
+            onApply={applyDateRange}
+            onClear={clearDateRange}
+            disabled={loading}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Todos los indicadores y resultados siguientes corresponden a: {periodLabel}.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Error banner */}
       {error && (
@@ -579,7 +603,7 @@ export default function DashboardPage() {
               title="Total Expedientes"
               rawValue={data.totalExpedientes}
               formattedValue={data.totalExpedientes.toLocaleString("es-MX")}
-              subtitle="Activos en el sistema"
+              subtitle={periodLabel}
               icon={FileText}
               iconBg="bg-emerald-50"
               iconColor="text-emerald-600"
@@ -590,7 +614,7 @@ export default function DashboardPage() {
               title="Monto Total en Multas"
               rawValue={Math.round(data.montoTotal)}
               formattedValue={formatMoney(data.montoTotal)}
-              subtitle="Acumulado desde oct 2024"
+              subtitle={periodLabel}
               icon={DollarSign}
               iconBg="bg-blue-50"
               iconColor="text-blue-600"
@@ -801,7 +825,7 @@ export default function DashboardPage() {
         {/* Area chart: tendencia mensual */}
         <ChartCard
           title="Tendencia mensual"
-          subtitle="Expedientes nuevos por mes (oct 2024 - presente)"
+          subtitle={`Expedientes nuevos por mes — ${periodLabel}`}
           loading={loading}
         >
           <ResponsiveContainer width="100%" height={300}>
@@ -1066,60 +1090,15 @@ export default function DashboardPage() {
                     <th className="py-3 px-6 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider">
                       #
                     </th>
-                    <th
-                      className="py-3 px-4 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("nombre")}
-                    >
-                      <span className="inline-flex items-center gap-1">ORPA <SortIcon column="nombre" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("total")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">Expedientes <SortIcon column="total" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("monto")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">Monto Total <SortIcon column="monto" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("pagados")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">Pagadas <SortIcon column="pagados" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("impugnados")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">Impugnadas/Recurso <SortIcon column="impugnados" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("enviadosCobro")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">Enviadas a cobro <SortIcon column="enviadosCobro" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-4 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("faltantesCobro")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">Faltantes <SortIcon column="faltantesCobro" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("cobPct")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">% Pagado <SortIcon column="cobPct" /></span>
-                    </th>
-                    <th
-                      className="py-3 px-6 text-right font-medium text-muted-foreground text-xs uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
-                      onClick={() => toggleSort("faltPct")}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">% Faltantes <SortIcon column="faltPct" /></span>
-                    </th>
+                    <SortableTableHead field="nombre" label="ORPA" current={sortKey} direction={sortDir} onSort={toggleSort} className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="total" label="Expedientes" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="monto" label="Monto Total" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="pagados" label="Pagadas" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="impugnados" label="Impugnadas/Recurso" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="enviadosCobro" label="Enviadas a cobro" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="faltantesCobro" label="Faltantes" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-4 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="cobPct" label="% Pagado" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-6 py-3 text-xs uppercase tracking-wider" />
+                    <SortableTableHead field="faltPct" label="% Faltantes" current={sortKey} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" className="px-6 py-3 text-xs uppercase tracking-wider" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -1473,14 +1452,14 @@ export default function DashboardPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <SortableHead field="numero_expediente" label="Expediente" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="orpa_nombre" label="ORPA" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="materia" label="Materia" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="monto_multa" label="Monto" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} defaultDir="desc" align="right" />
-                              <SortableHead field="fecha_referencia" label="F. Resolución" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="fecha_limite" label="F. Límite" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="dias_restantes" label="Días rest." current={pendSortField} dir={pendSortDir} onSort={togglePendSort} align="right" />
-                              <TableHead className="w-10">Estado</TableHead>
+                              <SortableTableHead field="numero_expediente" label="Expediente" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="orpa_nombre" label="ORPA" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="materia" label="Materia" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="monto_multa" label="Monto" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} defaultDirection="desc" align="right" />
+                              <SortableTableHead field="fecha_referencia" label="F. Resolución" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="fecha_limite" label="F. Límite" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="dias_restantes" label="Días rest." current={pendSortField} direction={pendSortDir} onSort={togglePendSort} align="right" />
+                              <SortableTableHead field="semaforo" label="Estado" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} defaultDirection="desc" align="center" className="w-20" />
                               <TableHead className="w-10"></TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1505,9 +1484,9 @@ export default function DashboardPage() {
                                   }`} />
                                 </TableCell>
                                 <TableCell>
-                                  <Link href={`/expedientes/${item.expediente_id}`}>
+                                  <DatePreservingLink href={`/expedientes/${item.expediente_id}`}>
                                     <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
-                                  </Link>
+                                  </DatePreservingLink>
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1564,14 +1543,14 @@ export default function DashboardPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <SortableHead field="numero_expediente" label="Expediente" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="orpa_nombre" label="ORPA" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="materia" label="Materia" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="fecha_referencia" label="F. Notificación" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="fecha_limite" label="F. Límite" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="monto_multa" label="Monto" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} defaultDir="desc" align="right" />
-                              <SortableHead field="dias_restantes" label="Días rest." current={pendSortField} dir={pendSortDir} onSort={togglePendSort} align="right" />
-                              <TableHead className="w-10">Estado</TableHead>
+                              <SortableTableHead field="numero_expediente" label="Expediente" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="orpa_nombre" label="ORPA" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="materia" label="Materia" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="fecha_referencia" label="F. Notificación" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="fecha_limite" label="F. Límite" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="monto_multa" label="Monto" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} defaultDirection="desc" align="right" />
+                              <SortableTableHead field="dias_restantes" label="Días rest." current={pendSortField} direction={pendSortDir} onSort={togglePendSort} align="right" />
+                              <SortableTableHead field="semaforo" label="Estado" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} defaultDirection="desc" align="center" className="w-20" />
                               <TableHead className="w-10"></TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1596,9 +1575,9 @@ export default function DashboardPage() {
                                   }`} />
                                 </TableCell>
                                 <TableCell>
-                                  <Link href={`/expedientes/${item.expediente_id}`}>
+                                  <DatePreservingLink href={`/expedientes/${item.expediente_id}`}>
                                     <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
-                                  </Link>
+                                  </DatePreservingLink>
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1651,11 +1630,11 @@ export default function DashboardPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <SortableHead field="numero_expediente" label="Expediente" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="orpa_nombre" label="ORPA" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="materia" label="Materia" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="fecha_referencia" label="F. Resolución" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} />
-                              <SortableHead field="monto_multa" label="Monto" current={pendSortField} dir={pendSortDir} onSort={togglePendSort} defaultDir="desc" align="right" />
+                              <SortableTableHead field="numero_expediente" label="Expediente" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="orpa_nombre" label="ORPA" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="materia" label="Materia" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="fecha_referencia" label="F. Resolución" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} />
+                              <SortableTableHead field="monto_multa" label="Monto" current={pendSortField} direction={pendSortDir} onSort={togglePendSort} defaultDirection="desc" align="right" />
                               <TableHead className="w-10"></TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1668,9 +1647,9 @@ export default function DashboardPage() {
                                 <TableCell className="text-xs">{item.fecha_referencia || "—"}</TableCell>
                                 <TableCell className="text-right text-xs font-mono">{formatMoney(item.monto_multa)}</TableCell>
                                 <TableCell>
-                                  <Link href={`/expedientes/${item.expediente_id}`}>
+                                  <DatePreservingLink href={`/expedientes/${item.expediente_id}`}>
                                     <Eye className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
-                                  </Link>
+                                  </DatePreservingLink>
                                 </TableCell>
                               </TableRow>
                             ))}

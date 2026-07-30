@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { API_BASE } from "@/lib/api-base";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,8 +99,11 @@ export default function CapturaPage() {
   const [resultadosFavorable, setResultadosFavorable] = useState<boolean | null>(null);
 
   // Resultados filtrados por el tipo de impugnación seleccionado
-  const resultadosDisponibles: ResultadoImpugnacion[] =
-    tiposImpugnacion.find((t) => t.clave === form.tipo_impugnacion)?.resultados || [];
+  const resultadosDisponibles = useMemo<ResultadoImpugnacion[]>(
+    () =>
+      tiposImpugnacion.find((t) => t.clave === form.tipo_impugnacion)?.resultados || [],
+    [form.tipo_impugnacion, tiposImpugnacion]
+  );
 
   useEffect(() => {
     async function load() {
@@ -121,7 +125,7 @@ export default function CapturaPage() {
   useEffect(() => {
     async function loadCatalogos() {
       try {
-        const res = await fetch("/api/catalogos/impugnacion");
+        const res = await fetch(`${API_BASE}/api/catalogos/impugnacion`);
         const json = await res.json();
         if (json.data) setTiposImpugnacion(json.data);
       } catch {
@@ -266,7 +270,7 @@ export default function CapturaPage() {
     };
 
     try {
-      const res = await fetch("/api/expedientes", {
+      const res = await fetch(`${API_BASE}/api/expedientes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

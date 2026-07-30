@@ -54,7 +54,15 @@ export async function POST(request: NextRequest) {
   if (parseResult.rows.length === 0) {
     return NextResponse.json(
       {
-        data: { parsed: 0, errors: parseResult.errors },
+        data: {
+          periodo,
+          parsed: 0,
+          inserted: 0,
+          notFound: [],
+          totales: parseResult.totales,
+          sheetName: parseResult.sheetName,
+          errors: parseResult.errors,
+        },
         error:
           "No se encontraron filas válidas en el concentrado. " +
           "Verifique que sea un archivo CIFRAS con una fila por ORPA.",
@@ -114,9 +122,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         data: {
+          periodo,
           parsed: parseResult.rows.length,
           inserted: 0,
           notFound,
+          totales: parseResult.totales,
+          sheetName: parseResult.sheetName,
           errors: parseResult.errors,
         },
         error: "Ninguna ORPA del concentrado coincide con las registradas en el sistema",

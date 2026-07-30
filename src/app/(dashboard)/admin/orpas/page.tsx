@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { API_BASE } from "@/lib/api-base";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,10 @@ import {
   FileText,
   DollarSign,
 } from "lucide-react";
+import { SortableTableHead } from "@/components/sortable-table-head";
+import { stableSort, type SortDirection } from "@/lib/table-sort";
+
+type OrpaSortKey = "clave" | "nombre" | "estado" | "activa" | "total" | "monto" | "cobPct" | "impugnados";
 
 interface OrpaStats {
   total: number;
@@ -65,6 +70,8 @@ export default function OrpasPage() {
   const [orpas, setOrpas] = useState<OrpaWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<OrpaSortKey>("nombre");
+  const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -87,7 +94,7 @@ export default function OrpasPage() {
   async function loadOrpas() {
     setLoading(true);
     try {
-      const r = await fetch("/api/admin/orpas");
+      const r = await fetch(`${API_BASE}/api/admin/orpas`);
       const res = await r.json();
       if (res.data) setOrpas(res.data);
     } catch (err) {
@@ -106,7 +113,7 @@ export default function OrpasPage() {
     setCreating(true);
     setCreateError(null);
     try {
-      const r = await fetch("/api/admin/orpas", {
+      const r = await fetch(`${API_BASE}/api/admin/orpas`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -137,7 +144,7 @@ export default function OrpasPage() {
     setEditSaving(true);
     setEditError(null);
     try {
-      const r = await fetch("/api/admin/orpas", {
+      const r = await fetch(`${API_BASE}/api/admin/orpas`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
@@ -168,7 +175,7 @@ export default function OrpasPage() {
     setDeleting(true);
     setDeleteError(null);
     try {
-      const r = await fetch(`/api/admin/orpas?id=${deleteTarget.id}`, { method: "DELETE" });
+      const r = await fetch(`${API_BASE}/api/admin/orpas?id=${deleteTarget.id}`, { method: "DELETE" });
       const res = await r.json();
       if (!r.ok || res.error) {
         setDeleteError(res.error || "Error al eliminar");
@@ -186,7 +193,7 @@ export default function OrpasPage() {
 
   // Toggle active
   async function toggleActive(orpa: OrpaWithStats) {
-    await fetch("/api/admin/orpas", {
+    await fetch(`${API_BASE}/api/admin/orpas`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: orpa.id, activa: !orpa.activa }),
@@ -194,12 +201,34 @@ export default function OrpasPage() {
     loadOrpas();
   }
 
-  const filtered = orpas.filter(
-    (o) =>
-      o.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      o.clave.toLowerCase().includes(search.toLowerCase()) ||
-      o.estado.toLowerCase().includes(search.toLowerCase())
-  );
+  function toggleSort(field: string, defaultDirection: SortDirection = "asc") {
+    const nextField = field as OrpaSortKey;
+    if (sortBy === nextField) {
+      setSortDir((current) => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(nextField);
+      setSortDir(defaultDirection);
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const query = search.toLowerCase();
+    const matches = orpas.filter(
+      (o) =>
+        o.nombre.toLowerCase().includes(query) ||
+        o.clave.toLowerCase().includes(query) ||
+        o.estado.toLowerCase().includes(query)
+    );
+    return stableSort(matches, (orpa) => {
+      if (sortBy === "total") return orpa.stats.total;
+      if (sortBy === "monto") return orpa.stats.monto;
+      if (sortBy === "impugnados") return orpa.stats.impugnados;
+      if (sortBy === "cobPct") {
+        return orpa.stats.total > 0 ? orpa.stats.pagados / orpa.stats.total : 0;
+      }
+      return orpa[sortBy];
+    }, sortDir);
+  }, [orpas, search, sortBy, sortDir]);
 
   const totalExpedientes = orpas.reduce((s, o) => s + o.stats.total, 0);
   const totalMonto = orpas.reduce((s, o) => s + o.stats.monto, 0);
@@ -220,11 +249,9 @@ export default function OrpasPage() {
 
         {/* Create Dialog */}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger>
-            <Button size="sm" className="gap-1">
-              <Plus className="w-4 h-4" />
-              Nueva ORPA
-            </Button>
+          <DialogTrigger render={<Button size="sm" className="gap-1" />}>
+            <Plus className="w-4 h-4" />
+            Nueva ORPA
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -327,14 +354,14 @@ export default function OrpasPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Clave</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-center">Activa</TableHead>
-                <TableHead className="text-right">Expedientes</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="text-right">% Cobrado</TableHead>
-                <TableHead className="text-right">Impugnados</TableHead>
+                <SortableTableHead field="clave" label="Clave" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                <SortableTableHead field="nombre" label="Nombre" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                <SortableTableHead field="estado" label="Estado" current={sortBy} direction={sortDir} onSort={toggleSort} />
+                <SortableTableHead field="activa" label="Activa" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="center" />
+                <SortableTableHead field="total" label="Expedientes" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" />
+                <SortableTableHead field="monto" label="Monto" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" />
+                <SortableTableHead field="cobPct" label="% Cobrado" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" />
+                <SortableTableHead field="impugnados" label="Impugnados" current={sortBy} direction={sortDir} onSort={toggleSort} defaultDirection="desc" align="right" />
                 <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>

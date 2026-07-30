@@ -1,5 +1,10 @@
 "use client";
 
+import { API_BASE } from "@/lib/api-base";
+import {
+  detectExpedienteImportKind,
+  type ExpedienteImportKind,
+} from "@/lib/excel/import-kind";
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -34,6 +39,9 @@ interface ImportResult {
   parseErrors: Array<{ row: number; error: string }>;
   importErrors: Array<{ row: number; error: string }>;
   sheetName: string;
+  importKind: ExpedienteImportKind;
+  excludedFromStatistics: boolean;
+  removedFromPending: number;
 }
 
 interface ConcentradoResult {
@@ -181,19 +189,25 @@ function ExpedientesTab({ orpas }: { orpas: IOrpa[] }) {
       if (orpaId && orpaId !== "auto") formData.append("orpa_id", orpaId);
 
       try {
-        const res = await fetch("/api/importar", {
+        const res = await fetch(`${API_BASE}/api/importar`, {
           method: "POST",
           body: formData,
         });
         const json = await res.json();
 
-        if (json.error && !json.data) {
+        if (!res.ok || json.error || !json.data) {
           setBatchResults((prev) =>
             prev.map((r, idx) =>
-              idx === i ? { ...r, status: "error", error: json.error } : r
+              idx === i
+                ? {
+                    ...r,
+                    status: "error",
+                    error: json.error || "El servidor devolvió una respuesta inválida",
+                  }
+                : r
             )
           );
-        } else if (json.data) {
+        } else {
           setBatchResults((prev) =>
             prev.map((r, idx) =>
               idx === i
@@ -266,6 +280,14 @@ function ExpedientesTab({ orpas }: { orpas: IOrpa[] }) {
               automáticamente&quot; para que cada archivo se asigne a su ORPA
               según el nombre del archivo.
             </p>
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+              <strong>Detección automática de pendientes:</strong> si el nombre
+              del archivo contiene &quot;Pendiente&quot; o &quot;Pendientes&quot;, sus registros
+              se sincronizan como la lista vigente del apartado Pendientes. Los
+              presentes quedan fuera de estadísticas y los anteriores que ya no
+              aparezcan vuelven al dashboard y a la lista general. Esta
+              sustitución solo ocurre si el archivo completo termina sin errores.
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -364,18 +386,17 @@ function ConcentradoTab() {
     if (periodo) formData.append("periodo", periodo);
 
     try {
-      const res = await fetch("/api/importar/concentrado", {
+      const res = await fetch(`${API_BASE}/api/importar/concentrado`, {
         method: "POST",
         body: formData,
       });
 
       const json = await res.json();
 
-      if (json.error && !json.data) {
-        setError(json.error);
-      } else if (json.data) {
+      if (!res.ok || json.error || !json.data) {
+        setError(json.error || "El servidor devolvió una respuesta inválida");
+      } else {
         setResult(json.data);
-        if (json.error) setError(json.error);
       }
     } catch {
       setError("Error de conexión al servidor");
@@ -454,7 +475,7 @@ function ConcentradoTab() {
               </Badge>
             </p>
 
-            {result.notFound.length > 0 && (
+            {(result.notFound?.length ?? 0) > 0 && (
               <div>
                 <p className="text-xs font-medium text-amber-600 mb-1">
                   ORPAs no reconocidas ({result.notFound.length}):
@@ -737,6 +758,7 @@ function MultiDropzone({
             <div className="max-h-64 overflow-y-auto space-y-1 border rounded-md p-2">
               {files.map((f) => {
                 const status = getStatus(f.name);
+                const importKind = detectExpedienteImportKind(f.name);
                 return (
                   <div
                     key={f.name}
@@ -744,6 +766,16 @@ function MultiDropzone({
                   >
                     <FileSpreadsheet className="w-4 h-4 text-muted-foreground shrink-0" />
                     <span className="flex-1 truncate">{f.name}</span>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        importKind === "pendientes"
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px]"
+                          : "text-[10px]"
+                      }
+                    >
+                      {importKind === "pendientes" ? "Pendientes" : "General"}
+                    </Badge>
                     <span className="text-[10px] text-muted-foreground shrink-0">
                       {(f.size / 1024).toFixed(0)} KB
                     </span>
@@ -811,29 +843,42 @@ function FileResultRow({ result }: { result: BatchFileResult }) {
           {result.fileName}
         </span>
         {r && (
-          <Badge variant="secondary" className="text-[10px]">
-            {r.inserted}/{r.totalRows}
-          </Badge>
+          <>
+            {r.excludedFromStatistics && (
+              <Badge className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px]">
+                Pendientes · fuera de estadísticas
+              </Badge>
+            )}
+            <Badge variant="secondary" className="text-[10px]">
+              {r.inserted}/{r.totalRows}
+            </Badge>
+          </>
         )}
       </div>
       {result.error && (
         <p className="text-xs text-destructive">{result.error}</p>
       )}
-      {r && (r.parseErrors.length > 0 || r.importErrors.length > 0) && (
+      {r && ((r.parseErrors?.length ?? 0) > 0 || (r.importErrors?.length ?? 0) > 0) && (
         <div className="space-y-1">
-          {r.parseErrors.length > 0 && (
+          {(r.parseErrors?.length ?? 0) > 0 && (
             <ErrorList
               title={`Errores de parseo (${r.parseErrors.length})`}
               items={r.parseErrors}
             />
           )}
-          {r.importErrors.length > 0 && (
+          {(r.importErrors?.length ?? 0) > 0 && (
             <ErrorList
               title={`Errores de importación (${r.importErrors.length})`}
               items={r.importErrors}
             />
           )}
         </div>
+      )}
+      {r?.excludedFromStatistics && r.removedFromPending > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {r.removedFromPending} registro(s) que ya no venían en la lista
+          regresaron a las estadísticas generales.
+        </p>
       )}
     </div>
   );
