@@ -649,11 +649,19 @@ export default function UsuariosPage() {
               <Label>Nueva contraseña (opcional)</Label>
               <Input
                 type="password"
-                placeholder="Dejar vacío para no cambiar"
+                placeholder={
+                  editForm.user_id === SUPER_ADMIN_ID && currentUserId !== SUPER_ADMIN_ID
+                    ? "Solo el super usuario puede cambiar esta contraseña"
+                    : "Dejar vacío para no cambiar"
+                }
                 value={editForm.password}
                 onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                 minLength={6}
+                disabled={editForm.user_id === SUPER_ADMIN_ID && currentUserId !== SUPER_ADMIN_ID}
               />
+              {editForm.user_id === SUPER_ADMIN_ID && currentUserId !== SUPER_ADMIN_ID && (
+                <p className="text-xs text-muted-foreground">Super usuario protegido: solo él puede cambiar su propia contraseña.</p>
+              )}
             </div>
 
             {editError && (

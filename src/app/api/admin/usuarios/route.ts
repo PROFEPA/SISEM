@@ -335,6 +335,14 @@ export async function PUT(request: Request) {
     );
   }
 
+  // Solo el propio super usuario puede cambiar su contraseña; ningún otro admin.
+  if (user_id === SUPER_ADMIN_ID && password && auth.user!.id !== SUPER_ADMIN_ID) {
+    return NextResponse.json(
+      { data: null, error: "Solo el super usuario puede cambiar su propia contraseña" },
+      { status: 403 }
+    );
+  }
+
   const normalizedOrpaId = normalizeOrpaId(orpa_id);
 
   if (normalizedOrpaId && !UUID_PATTERN.test(normalizedOrpaId)) {
